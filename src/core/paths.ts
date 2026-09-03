@@ -18,6 +18,16 @@ export const DEFAULT_PATHS = {
 export const DRAWER_PATHS = Object.values(DEFAULT_PATHS);
 
 /**
+ * 占位远端地址前缀：init project 未提供 --remote 时登记的本地项目标记。
+ * sync/doctor/status 识别它并跳过远端操作（视为 local-only 项目）。
+ */
+export const PLACEHOLDER_URL_PREFIX = 'git@placeholder.local:';
+
+export function isPlaceholderUrl(url: string): boolean {
+  return url.startsWith(PLACEHOLDER_URL_PREFIX);
+}
+
+/**
  * 从 start（默认 cwd）逐级向上查找 workspace 根目录。
  * workspace 根 = 存在 .agile/workspace.yaml 的目录。
  */

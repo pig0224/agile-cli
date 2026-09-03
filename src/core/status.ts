@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { currentBranch, currentCommit, isDirty } from './git.js';
+import { isPlaceholderUrl } from './paths.js';
 import type { RegistryConfig } from './schemas.js';
 
 export interface RepoStatus {
@@ -12,13 +13,15 @@ export interface RepoStatus {
   pin?: string;
   /** 当前 commit 与 pin 不一致时为 true */
   drifted?: boolean;
+  /** 本地项目（占位 URL，未配置远端） */
+  local?: boolean;
   error?: string;
 }
 
 export async function collectStatus(root: string, registry: RegistryConfig): Promise<RepoStatus[]> {
   const result: RepoStatus[] = [];
   for (const [repoPath, entry] of Object.entries(registry.repositories)) {
-    const status: RepoStatus = { repoPath, exists: false, pin: entry.pin };
+    const status: RepoStatus = { repoPath, exists: false, pin: entry.pin, local: isPlaceholderUrl(entry.url) };
     result.push(status);
 
     const repoDir = path.join(root, repoPath);

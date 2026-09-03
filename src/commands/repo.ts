@@ -12,12 +12,12 @@ export const repoCommand = new Command('repo')
     new Command('add')
       .description('登记一个仓库到 registry（不拉取代码，sync 时生效）')
       .argument('<repoPath>', '仓库路径（相对 workspace 根，如 tech-specs、projects/order-service）')
-      .argument('[url]', 'git URL；缺省时用 <repoPath> 推导')
+      .argument('<url>', 'git URL，如 git@gitlab.corp:team/repo.git')
       .option('--branch <branch>', '跟踪分支（默认 main）', 'main')
-      .action(async (repoPath: string, url: string | undefined, opts: { branch: string }) => {
+      .action(async (repoPath: string, url: string, opts: { branch: string }) => {
         const root = requireWorkspaceRoot();
         assertValidRepoPath(repoPath);
-        const finalUrl = url ?? `git@placeholder.local:${repoPath}.git`;
+        const finalUrl = url;
         const registry = await loadRegistry(root);
         if (registry.repositories[repoPath]) {
           throw new AgileError(`registry 中已存在：${repoPath}（如需更新请用 repo set-url）`);

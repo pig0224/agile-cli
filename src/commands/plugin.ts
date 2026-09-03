@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { execa } from 'execa';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
@@ -8,7 +8,9 @@ import { requireWorkspaceRoot } from '../core/paths.js';
 import { loadPluginFile, savePluginFile } from '../core/config.js';
 import * as ui from '../ui.js';
 
-/** 内置插件（随 @fcc/agile npm 包分发的 agile-plugin） */
+const require = createRequire(import.meta.url);
+
+/** 内置插件名（@fcc/agile-plugin npm 包，随 @fcc/agile 一起安装） */
 const BUILTIN = 'agile';
 const MARKETPLACE = 'fcc-agile';
 
@@ -20,10 +22,21 @@ async function readJson(file: string): Promise<Record<string, unknown>> {
   }
 }
 
-/** 随包分发的 plugin 目录（构建时由 packages/agile-plugin 复制而来）。
- *  本文件编译后位于 <pkg>/dist/commands/plugin.js → 上两级即包根。 */
+/**
+ * 解析随 CLI 依赖安装的 @fcc/agile-plugin 包目录。
+ * 通过 node 模块解析定位（node_modules/@fcc/agile-plugin），
+ * 与发布形态一致：npm install -g @fcc/agile 后即存在。
+ */
 function builtinPluginDir(): string {
-  return fileURLToPath(new URL('../../plugin', import.meta.url));
+  try {
+    const pkgJson = require.resolve('@fcc/agile-plugin/package.json');
+    return path.dirname(pkgJson);
+  } catch {
+    throw new AgileError(
+      '未找到 @fcc/agile-plugin 包。它应作为 @fcc/agile 的依赖自动安装；' +
+        '若为本地开发，请先在仓库根执行 pnpm install。',
+    );
+  }
 }
 
 /** 通过 claude CLI 注册本地 marketplace 并安装插件 */
@@ -47,7 +60,7 @@ export const pluginCommand = new Command('plugin')
   .description('Claude Code 插件管理（安装 agile plugin 或后期新增的 plugin）')
   .addCommand(
     new Command('install')
-      .description('安装插件（默认 agile，随 CLI 分发；后续支持 git URL / npm）')
+      .description('安装插件（默认 agile，随 CLI 的 npm 依赖分发；后续支持 git URL / npm 包名）')
       .argument('[source]', '插件来源：插件名', BUILTIN)
       .action(async (source: string) => {
         const root = requireWorkspaceRoot();
@@ -56,7 +69,7 @@ export const pluginCommand = new Command('plugin')
           throw new AgileError(`暂不支持从 ${source} 安装插件。当前内置：${BUILTIN}（第三方插件后续版本支持）。`);
         }
 
-        // 1. 解析随包分发的 plugin 目录与插件名
+        // 1. 解析插件包目录与插件名
         const pluginDir = builtinPluginDir();
         const manifest = await readJson(path.join(pluginDir, '.claude-plugin', 'plugin.json'));
         if (!manifest.name) {
@@ -67,9 +80,7 @@ export const pluginCommand = new Command('plugin')
         // 2. 通过 claude CLI 安装（marketplace add + install）
         const installed = await installViaClaudeCli(pluginDir, pluginName);
         if (!installed) {
-          console.log(
-            ui.warn('未能通过 claude CLI 自动安装，请手动执行：'),
-          );
+          console.log(ui.warn('未能通过 claude CLI 自动安装，请手动执行：'));
           console.log(ui.dim(`  claude plugin marketplace add ${pluginDir}`));
           console.log(ui.dim(`  claude plugin install ${pluginName}@${MARKETPLACE}`));
         }

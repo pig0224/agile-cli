@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
-import { DEFAULT_PATHS, DRAWER_PATHS, requireWorkspaceRoot } from '../core/paths.js';
+import { DEFAULT_PATHS, DRAWER_PATHS, PLACEHOLDER_URL_PREFIX, requireWorkspaceRoot } from '../core/paths.js';
 import { loadRegistry, saveRegistry, toYaml } from '../core/config.js';
 import { git } from '../core/git.js';
 import { scaffoldProject, PROJECT_TYPES, type ProjectType } from '../core/templates.js';
@@ -126,7 +126,7 @@ export const initCommand = new Command('init')
         await git(root, ['-c', 'protocol.file.allow=always', 'submodule', 'add', '--name', repoPath, tmpUrl, repoPath]);
 
         // 4. 回写真实 URL（远端或占位）
-        const finalUrl = opts.remote ?? `git@placeholder.local:${repoPath}.git`;
+        const finalUrl = opts.remote ?? `${PLACEHOLDER_URL_PREFIX}${repoPath}.git`;
         await git(root, ['config', '-f', '.gitmodules', `submodule.${repoPath}.url`, finalUrl]);
         await git(root, ['add', '.gitmodules', repoPath]);
 
