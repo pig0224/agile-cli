@@ -5,6 +5,8 @@
 [![npm](https://img.shields.io/npm/v/fcc-agile-cli.svg)](https://www.npmjs.com/package/fcc-agile-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
+📖 **完整文档**：https://pig0224.github.io/agile-docs/ （命令参考 / MCP / 使用流程 / 插件与模板指南）
+
 **One root, five drawers** — 一个 workspace 根 + 五个抽屉的研发工作区 CLI。
 
 **单仓模式**：整个团队一个 git 仓库（biz-tech-docs / projects / process-docs 都是普通目录），跨模块变更一个 PR 天然原子；只有公司级规范（tech-specs 等）作为外部 submodule 由 `.agile/registry.yaml` 登记、`agile sync` 收敛——**registry 是唯一事实源**。
