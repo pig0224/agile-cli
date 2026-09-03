@@ -1,6 +1,6 @@
 # 发版流程与 CI/CD
 
-> 只有本仓库（`agile-cli`）发 npm；插件市场与模板注册中心以 git 仓库分发，推送即完成发版。
+> 只有本仓库（`fcc-agile-cli`，bin: `agile`）发 npm；插件市场与模板注册中心以 git 仓库分发，推送即完成发版。
 > **npm publish 只由 GitHub Actions 执行**（tag 触发），本地不需要也不应该再执行 npm publish。
 
 ## 0. 一键发版（推荐）
@@ -50,4 +50,4 @@ git tag v0.2.0 && git push origin v0.2.0
 - [ ] GitHub 仓库创建（开源），推送代码
 - [ ] `src/core/paths.ts` 中两个默认地址（`DEFAULT_PLUGIN_MARKETPLACE` / `DEFAULT_TEMPLATE_REGISTRY`）与 `package.json` 的 `repository.url` 替换为实际仓库地址
 - [ ] 打 tag `v0.1.0` 推送，确认 Release workflow 全绿
-- [ ] `npm i -g agile-cli` 验证安装 + `agile plugin install agile` + `agile template list` 验证两个 git 源链路
+- [ ] `npm i -g fcc-agile-cli` 验证安装 + `agile plugin install agile` + `agile template list` 验证两个 git 源链路

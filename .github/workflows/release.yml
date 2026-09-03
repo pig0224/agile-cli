@@ -42,7 +42,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish agile-cli
+      - name: Publish fcc-agile-cli
         run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
