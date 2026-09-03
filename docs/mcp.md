@@ -25,7 +25,7 @@
 { "mcpServers": { "agile": { "command": "agile", "args": ["mcp"] } } }
 ```
 
-**agile-plugin 捆绑**：[agile-plugin 仓库](https://github.com/pig0224/agile-plugin)中插件的 `.mcp.json` 声明同样的 server，安装插件后自动可用（工具名带插件命名空间前缀）。
+**agile-plugins 捆绑**：[agile-plugins 仓库](https://github.com/pig0224/agile-plugins)中插件的 `.mcp.json` 声明同样的 server，安装插件后自动可用（工具名带插件命名空间前缀）。
 
 ## 3. 错误约定
 

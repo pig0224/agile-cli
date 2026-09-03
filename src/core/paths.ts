@@ -23,7 +23,7 @@ export const DRAWER_PATHS = Object.values(DEFAULT_PATHS);
  * workspace.yaml 可覆盖（plugin.marketplace / templates.registry），
  * 新增插件或模板只需更新这两个仓库，CLI 无需发版。
  */
-export const DEFAULT_PLUGIN_MARKETPLACE = 'https://github.com/pig0224/agile-plugin.git';
+export const DEFAULT_PLUGIN_MARKETPLACE = 'https://github.com/pig0224/agile-plugins.git';
 export const DEFAULT_TEMPLATE_REGISTRY = 'https://github.com/pig0224/agile-templates.git';
 
 /** 模板仓库的用户级缓存根目录（跨 workspace 共享） */

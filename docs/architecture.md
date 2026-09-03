@@ -1,20 +1,20 @@
 # 总体架构
 
-> `@fcc/agile`（本仓库）+ 外部两个 git 仓库（[agile-plugin](https://github.com/pig0224/agile-plugin) 插件市场、[agile-templates](https://github.com/pig0224/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
+> `@fcc/agilecli`（本仓库）+ 外部两个 git 仓库（[agile-plugins](https://github.com/pig0224/agile-plugins) 插件市场、[agile-templates](https://github.com/pig0224/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
 
 ## 1. 三仓解耦
 
 | 交付物 | 分发载体 | 扩展方式 | 本仓库是否需要发版 |
 |---|---|---|---|
-| `@fcc/agile`（CLI，本仓库） | npm | —（本体） | — |
-| agile-plugin（插件市场） | git 仓库 | 加 `plugins/<name>/` + 登记 marketplace.json | ❌ |
+| `@fcc/agilecli`（CLI，本仓库） | npm | —（本体） | — |
+| agile-plugins（插件市场） | git 仓库 | 加 `plugins/<name>/` + 登记 marketplace.json | ❌ |
 | agile-templates（模板库） | git 仓库 | 加 `<模板名>/` + 登记 registry.yaml | ❌ |
 
 对接点在 **workspace.yaml**：
 
 ```yaml
 plugin:
-  marketplace: https://github.com/pig0224/agile-plugin.git   # 插件市场
+  marketplace: https://github.com/pig0224/agile-plugins.git   # 插件市场
 templates:
   registry: https://github.com/pig0224/agile-templates.git  # 模板源
 ```
@@ -81,6 +81,6 @@ agile template list           # 从模板源拉取注册中心
 agile init project order-service --template go-service
 agile worktree create projects/order-service feature/STO-001 && remove
 agile task create STO-001
-agile plugin install agile --marketplace ../agile-plugin
+agile plugin install agile --marketplace ../agile-plugins
 node dist/index.js mcp        # JSON-RPC initialize + tools/list + agile_status
 ```

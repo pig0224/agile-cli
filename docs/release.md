@@ -1,6 +1,6 @@
 # 发版流程与 CI/CD
 
-> 只有本仓库（`@fcc/agile`）发 npm；插件市场与模板注册中心以 git 仓库分发，推送即完成发版。
+> 只有本仓库（`@fcc/agilecli`）发 npm；插件市场与模板注册中心以 git 仓库分发，推送即完成发版。
 
 ## 1. CI（[.github/workflows/ci.yml](../.github/workflows/ci.yml)）
 
@@ -35,4 +35,4 @@ git tag v0.2.0 && git push origin v0.2.0
 - [ ] `src/core/paths.ts` 中两个默认地址（`DEFAULT_PLUGIN_MARKETPLACE` / `DEFAULT_TEMPLATE_REGISTRY`）与 `package.json` 的 `repository.url` 替换为实际仓库地址
 - [ ] npm 账号创建 `@fcc` scope（或改为实际拥有的 scope），配置 `NPM_TOKEN` secret
 - [ ] 打 tag `v0.1.0` 推送，确认 Release workflow 全绿
-- [ ] `npm i -g @fcc/agile` 验证安装 + `agile plugin install agile` + `agile template list` 验证两个 git 源链路
+- [ ] `npm i -g @fcc/agilecli` 验证安装 + `agile plugin install agile` + `agile template list` 验证两个 git 源链路

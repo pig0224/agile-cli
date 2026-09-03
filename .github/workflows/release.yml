@@ -7,7 +7,7 @@ on:
 
 jobs:
   publish:
-    name: Publish @fcc/agile to npm & create GitHub Release
+    name: Publish @fcc/agilecli to npm & create GitHub Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,7 +42,7 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Publish @fcc/agile
+      - name: Publish @fcc/agilecli
         run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

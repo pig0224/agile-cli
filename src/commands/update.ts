@@ -6,7 +6,7 @@ import { cliVersion } from '../version.js';
 /** 查询 npm registry 上最新版本 */
 async function latestFromNpm(): Promise<string | null> {
   try {
-    const r = await execa('npm', ['view', '@fcc/agile', 'version'], { reject: false, timeout: 20_000, windowsHide: true });
+    const r = await execa('npm', ['view', '@fcc/agilecli', 'version'], { reject: false, timeout: 20_000, windowsHide: true });
     if (r.exitCode === 0 && r.stdout.trim()) return r.stdout.trim();
     return null;
   } catch {
@@ -16,7 +16,7 @@ async function latestFromNpm(): Promise<string | null> {
 
 export const updateCommand = new Command('update')
   .description('更新 agile CLI 自身 / agile plugin')
-  .option('--cli', '只更新 CLI（npm install -g @fcc/agile@latest）')
+  .option('--cli', '只更新 CLI（npm install -g @fcc/agilecli@latest）')
   .option('--plugin', '只更新 agile plugin（重新安装本地 marketplace 指向）')
   .action(async (opts: { cli?: boolean; plugin?: boolean }) => {
     // 默认两者都检查
@@ -32,14 +32,14 @@ export const updateCommand = new Command('update')
         console.log(ui.ok('CLI 已是最新版本。'));
       } else {
         console.log(ui.info(`发现新版本：${latest}，执行自更新…`));
-        const r = await execa('npm', ['install', '-g', '@fcc/agile@latest'], { shell: true, reject: false, windowsHide: true });
+        const r = await execa('npm', ['install', '-g', '@fcc/agilecli@latest'], { shell: true, reject: false, windowsHide: true });
         if (r.exitCode === 0) console.log(ui.ok('CLI 已更新，请重开终端使 bin 生效。'));
         else console.log(ui.fail(`自更新失败：${r.stderr || r.stdout}`));
       }
     }
 
     if (doPlugin) {
-      // plugin 随 CLI 分发（包内 plugin/ 目录），CLI 更新后重新执行安装刷新 marketplace 指向
+      // 插件市场为独立 git 仓库，重新执行安装拉取市场最新版本
       const { pluginCommand } = await import('./plugin.js');
       await pluginCommand.parseAsync(['install', 'agile'], { from: 'user' });
     }

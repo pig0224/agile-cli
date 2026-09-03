@@ -20,7 +20,7 @@ function rootOrError(): { root: string | null; error?: string } {
 
 export async function startMcpServer(): Promise<void> {
   const server = new McpServer(
-    { name: '@fcc/agile', version: '0.1.0' },
+    { name: '@fcc/agilecli', version: '0.1.0' },
     { capabilities: { tools: {} } },
   );
 

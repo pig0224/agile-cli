@@ -1,7 +1,7 @@
 # CLAUDE.md — agile-cli 仓库导航
 
-本仓库 = `@fcc/agile`（npm 包，bin: `agile`）。配套仓库（独立 git 仓库，非本仓库的一部分）：
-- `agile-plugin`（Claude Code 插件市场）：`src/core/paths.ts` 的 `DEFAULT_PLUGIN_MARKETPLACE` 指向其地址
+本仓库 = `@fcc/agilecli`（npm 包，bin: `agile`）。配套仓库（独立 git 仓库，非本仓库的一部分）：
+- `agile-plugins`（Claude Code 插件市场）：`src/core/paths.ts` 的 `DEFAULT_PLUGIN_MARKETPLACE` 指向其地址
 - `agile-templates`（项目模板注册中心）：`DEFAULT_TEMPLATE_REGISTRY` 指向其地址
 
 **修改代码前先读本文。**
@@ -15,7 +15,7 @@ pnpm test           # vitest（test/）
 pnpm typecheck
 node dist/index.js --help
 node dist/index.js template check --registry ../agile-templates   # 兄弟模板仓库直读模式
-claude plugin validate ../agile-plugin                             # 兄弟插件市场校验
+claude plugin validate ../agile-plugins                            # 兄弟插件市场校验
 ```
 
 E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace → repo add <本地裸仓库> → sync → template list → init project --template → doctor`，参考 docs/architecture.md「验证清单」。

@@ -1,8 +1,8 @@
-# @fcc/agile
+# @fcc/agilecli
 
 [![CI](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml)
 [![Release](https://github.com/pig0224/agile-cli/actions/workflows/release.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/release.yml)
-[![npm](https://img.shields.io/npm/v/@fcc/agile.svg)](https://www.npmjs.com/package/@fcc/agile)
+[![npm](https://img.shields.io/npm/v/@fcc/agilecli.svg)](https://www.npmjs.com/package/@fcc/agilecli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **One root, five drawers** — 一个 workspace 根 + 五个知识/代码抽屉的研发工作区 CLI，设计参考 Chromium 的 [depot_tools/gclient](https://chromium.googlesource.com/chromium/tools/depot_tools/)：`.agile/registry.yaml` 是唯一事实源（≈ DEPS），`agile sync` 把磁盘状态收敛到声明状态。
@@ -11,13 +11,13 @@
 
 | 仓库 | 职责 |
 |---|---|
-| [agile-plugin](https://github.com/pig0224/agile-plugin) | Claude Code 插件市场（SDD/TDD 插件） |
+| [agile-plugins](https://github.com/pig0224/agile-plugins) | Claude Code 插件市场（SDD/TDD 插件） |
 | [agile-templates](https://github.com/pig0224/agile-templates) | 项目模板注册中心（registry.yaml + 模板目录） |
 
 ## 安装
 
 ```bash
-npm install -g @fcc/agile
+npm install -g @fcc/agilecli
 ```
 
 > Node ≥ 18，git ≥ 2.30。插件与模板由各自 git 仓库分发，无需 npm。
