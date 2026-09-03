@@ -21,7 +21,7 @@ const program = new Command();
 
 program
   .name('agile')
-  .description('一个根、五个抽屉：Workspace 生命周期管理 CLI\n设计参考 depot_tools/gclient，registry.yaml 为唯一事实源。')
+  .description('一个根、五个抽屉：Workspace 生命周期管理 CLI\n单仓模式：registry.yaml 登记外部仓库（submodule），registry 为唯一事实源。')
   .version(cliVersion, '-v, --version', '查看当前 CLI 版本')
   .addCommand(initCommand)
   .addCommand(syncCommand)

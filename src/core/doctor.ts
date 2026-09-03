@@ -4,7 +4,7 @@ import { checkRemote, isDirty, currentCommit } from './git.js';
 import { AgileError } from './errors.js';
 import { parseGitmodules } from './gitmodules.js';
 import { loadRegistry, loadWorkspace } from './config.js';
-import { assertValidRepoPath, isPlaceholderUrl } from './paths.js';
+import { assertValidRepoPath } from './paths.js';
 import type { RegistryConfig } from './schemas.js';
 
 export interface DoctorIssue {
@@ -124,26 +124,16 @@ export async function runDoctor(root: string, opts: DoctorOptions = {}): Promise
 
     // 5. 远端可达性 / 权限
     if (!opts.offline) {
-      if (isPlaceholderUrl(entry.url)) {
+      const r = await checkRemote(entry.url);
+      remoteChecked++;
+      if (!r.ok) {
         issues.push({
-          level: 'warn',
+          level: 'error',
           repoPath,
-          code: 'no-remote',
-          message: `${repoPath} 未配置远端（本地项目）。推送后用 agile repo set-url ${repoPath} <git-url> 登记。`,
-          fixable: false,
+          code: 'remote-unreachable',
+          message: `${repoPath} 远端不可达或无权限（${entry.url}）：${r.stderr.split('\n')[0] ?? '未知错误'}`,
+          fixable: true,
         });
-      } else {
-        const r = await checkRemote(entry.url);
-        remoteChecked++;
-        if (!r.ok) {
-          issues.push({
-            level: 'error',
-            repoPath,
-            code: 'remote-unreachable',
-            message: `${repoPath} 远端不可达或无权限（${entry.url}）：${r.stderr.split('\n')[0] ?? '未知错误'}`,
-            fixable: true,
-          });
-        }
       }
     }
   }

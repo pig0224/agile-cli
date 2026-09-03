@@ -8,7 +8,7 @@
 |---|---|---|
 | `agile_workspace_info` | workspace 配置、五抽屉路径、仓库注册表 | - |
 | `agile_status` | 各仓库 branch/commit/dirty/pin/local 状态 | - |
-| `agile_sync` | 收敛磁盘状态到 registry | `dryRun`（默认 true！）、`force`、`repo[]`、`noHooks` |
+| `agile_sync` | 同步 registry 登记的外部仓库（submodule），收敛磁盘状态 | `dryRun`（默认 true！）、`force`、`repo[]` |
 | `agile_doctor` | 健康检查（配置/权限/漂移） | `offline`（跳过远端探测）、`fix`（自动修复） |
 | `agile_template_list` | 列出模板注册中心全部模板 | `refresh`（默认 false 只读缓存） |
 | `agile_task_create` | 创建 `process-docs/<编号>/` 五文档目录。**task 能力不注册 CLI 命令，仅通过本工具暴露**（供 Claude Code 插件命令 /agile:sync-req 等编程化调用） | `taskId`（如 STO-001） |

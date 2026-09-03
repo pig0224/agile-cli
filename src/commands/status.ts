@@ -31,9 +31,7 @@ export const statusCommand = new Command('status')
             ? ui.warn(`pin 漂移 → ${s.pin?.slice(0, 8)}`)
             : s.dirty
               ? ui.warn('dirty')
-              : s.local
-                ? ui.info('本地（未配置远端）')
-                : ui.ok('干净');
+              : ui.ok('干净');
       rows.push([s.repoPath, s.branch ?? '-', s.commit ?? '-', state]);
     }
     console.log(ui.table(rows));

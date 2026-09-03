@@ -2,63 +2,84 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
 import { requireWorkspaceRoot } from '../core/paths.js';
-import { loadRegistry } from '../core/config.js';
 import { currentBranch, git, gitTry } from '../core/git.js';
+import { computeSyncPlan, executeSyncPlan } from '../core/sync.js';
+import { loadRegistry } from '../core/config.js';
 import * as ui from '../ui.js';
 
-/** worktree 存放根目录：workspace 下 .worktrees/（已在 .gitignore 思路中隔离） */
+/** worktree 存放根目录：workspace 下 .worktrees/（已 gitignore） */
 const WORKTREE_ROOT = '.worktrees';
 
+/** worktree create 前自动同步外部仓库（失败仅警告不阻塞，基于现有状态创建） */
+async function autoSync(root: string): Promise<void> {
+  try {
+    const registry = await loadRegistry(root);
+    const plan = await computeSyncPlan(root, registry);
+    if (plan.adds.length + plan.updates.length + plan.removes.length > 0) {
+      await executeSyncPlan(root, registry, plan);
+    }
+  } catch (e) {
+    console.log(ui.warn(`自动同步外部仓库失败（继续创建 worktree）：${(e as Error).message}`));
+  }
+}
+
 export const worktreeCommand = new Command('worktree')
-  .description('项目开发环境（git worktree）管理：为仓库创建隔离的开发目录')
+  .description('开发环境管理：为 workspace 根仓库创建隔离的 git worktree（含全部代码的完整开发环境）')
   .addCommand(
     new Command('create')
-      .description('为仓库创建开发 worktree，如 agile worktree create projects/order-service feature/STO-001')
-      .argument('<repoPath>', '仓库路径（registry 中的 key）')
-      .argument('[branch]', '开发分支名；缺省为 feature/<日期>-<序号>')
+      .description('创建 workspace worktree，如 agile worktree create feature/STO-001（创建前自动同步外部仓库）')
+      .argument('<branch>', '开发分支名，如 feature/STO-001')
       .option('--base <ref>', '基准分支/commit，默认当前 HEAD')
-      .action(async (repoPath: string, branch: string | undefined, opts: { base?: string }) => {
+      .action(async (branch: string, opts: { base?: string }) => {
         const root = requireWorkspaceRoot();
-        const registry = await loadRegistry(root);
-        if (!registry.repositories[repoPath]) {
-          throw new AgileError(`registry 中不存在：${repoPath}`);
-        }
-        const repoDir = path.join(root, repoPath);
-        const finalBranch = branch ?? `feature/${new Date().toISOString().slice(0, 10)}`;
 
-        const target = path.join(root, WORKTREE_ROOT, repoPath, finalBranch.replace(/[/\\]/g, '__'));
-        await git(root, [
-          '-C', repoDir,
-          'worktree', 'add', '-b', finalBranch, target, opts.base ?? 'HEAD',
-        ]);
+        // 0. 前置：workspace 仓库必须有首次提交（worktree 基于已有 commit）
+        const hasHead = await gitTry(root, ['rev-parse', '--verify', 'HEAD']);
+        if (!hasHead.ok) {
+          throw new AgileError(
+            'workspace 仓库还没有首次提交，无法创建 worktree。请先完成初始提交（如 registry/抽屉骨架/项目代码）后再试。',
+          );
+        }
+
+        // 1. 自动同步外部仓库（tech-specs 等）
+        await autoSync(root);
+
+        // 2. 创建根仓库 worktree：.worktrees/<branch 路径转下划线>
+        const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
+        try {
+          await git(root, ['worktree', 'add', '-b', branch, target, opts.base ?? 'HEAD']);
+        } catch (e) {
+          // 失败时清理半成品目录（git 可能已创建目录）
+          await import('node:fs/promises').then((fs) => fs.rm(target, { recursive: true, force: true }));
+          throw e;
+        }
 
         const wtBranch = await currentBranch(target);
         console.log(ui.ok(`worktree 已创建：${path.relative(root, target)}（分支 ${wtBranch}）`));
-        console.log(ui.dim(`开发完成后：agile worktree remove ${repoPath} ${finalBranch}`));
+        console.log(ui.dim(`开发完成后：agile worktree remove ${branch}`));
       }),
   )
   .addCommand(
     new Command('list')
-      .description('列出所有 worktree')
-      .argument('[repoPath]', '可选：限定某个仓库')
-      .action(async (repoPath?: string) => {
+      .description('列出所有 workspace worktree')
+      .action(async () => {
         const root = requireWorkspaceRoot();
-        const registry = await loadRegistry(root);
-        const repos = repoPath ? [repoPath] : Object.keys(registry.repositories);
+        const r = await gitTry(root, ['worktree', 'list', '--porcelain']);
+        if (!r.ok) {
+          throw new AgileError(`获取 worktree 列表失败：${r.stderr}`);
+        }
         let found = false;
-        for (const rp of repos) {
-          const repoDir = path.join(root, rp);
-          const r = await gitTry(repoDir, ['worktree', 'list', '--porcelain']);
-          if (!r.ok) continue;
-          for (const line of r.stdout.split('\n')) {
-            if (!line.startsWith('worktree ')) continue;
-            const wtPath = path.resolve(line.slice('worktree '.length));
-            // 跳过主工作区与 .git/modules 内部路径（submodule 场景）
-            if (path.resolve(repoDir) === wtPath) continue;
-            if (wtPath.includes(`${path.sep}.git${path.sep}modules${path.sep}`)) continue;
-            found = true;
-            console.log(`${ui.info(rp)}  ${path.relative(root, wtPath)}`);
-          }
+        for (const block of r.stdout.split('\n\n')) {
+          const lines = block.split('\n');
+          const wtLine = lines.find((l) => l.startsWith('worktree '));
+          if (!wtLine) continue;
+          const wtPath = path.resolve(wtLine.slice('worktree '.length));
+          if (path.resolve(root) === wtPath) continue;
+          if (wtPath.includes(`${path.sep}.git${path.sep}modules${path.sep}`)) continue;
+          const branchLine = lines.find((l) => l.startsWith('branch '));
+          const branch = branchLine ? branchLine.slice('branch refs/heads/'.length) : '(detached)';
+          found = true;
+          console.log(`${ui.info(branch.padEnd(28))}${path.relative(root, wtPath)}`);
         }
         if (!found) console.log(ui.dim('（无 worktree）'));
       }),
@@ -66,39 +87,25 @@ export const worktreeCommand = new Command('worktree')
   .addCommand(
     new Command('remove')
       .description('移除 worktree（--force 处理含未提交改动的工作区）')
-      .argument('<repoPath>', '仓库路径')
-      .argument('[branch]', '分支名（与 create 时一致）')
+      .argument('<branch>', '分支名（与 create 时一致）')
       .option('--force', '强制移除（丢弃未提交改动）')
-      .action(async (repoPath: string, branch: string | undefined, opts: { force?: boolean }) => {
+      .action(async (branch: string, opts: { force?: boolean }) => {
         const root = requireWorkspaceRoot();
-        const registry = await loadRegistry(root);
-        if (!registry.repositories[repoPath]) {
-          throw new AgileError(`registry 中不存在：${repoPath}`);
+        const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
+        const fs = await import('node:fs/promises');
+        if (!(await fs.stat(target).then(() => true).catch(() => false))) {
+          throw new AgileError(`worktree 不存在：${path.relative(root, target)}（agile worktree list 查看）`);
         }
-        const repoDir = path.join(root, repoPath);
-        const list = await git(repoDir, ['worktree', 'list', '--porcelain']);
-        const candidates = list
-          .split('\n')
-          .filter((l) => l.startsWith('worktree '))
-          .map((l) => l.slice('worktree '.length))
-          .filter((p) => p !== repoDir.replace(/\\/g, '/'));
-
-        let target: string | undefined;
-        if (branch) {
-          target = candidates.find((p) => p.replace(/\\/g, '/').endsWith(branch.replace(/[/\\]/g, '__')));
-        } else if (candidates.length === 1) {
-          target = candidates[0];
-        } else if (candidates.length > 1) {
-          throw new AgileError(`该仓库有多个 worktree，请指定分支：\n${candidates.join('\n')}`);
+        const rm = await gitTry(root, ['worktree', 'remove', ...(opts.force ? ['--force'] : []), target]);
+        if (!rm.ok) {
+          // 不是有效 worktree（如创建失败残留的半成品目录）：直接删除目录
+          await fs.rm(target, { recursive: true, force: true });
+          console.log(ui.warn(`已清理非 worktree 目录：${path.relative(root, target)}`));
+          return;
         }
-        if (!target) throw new AgileError('未找到对应的 worktree');
-
-        await git(repoDir, ['worktree', 'remove', ...(opts.force ? ['--force'] : []), target]);
         console.log(ui.ok(`worktree 已移除：${path.relative(root, target)}`));
-        if (branch) {
-          const del = await gitTry(repoDir, ['branch', '-D', branch]);
-          if (del.ok) console.log(ui.ok(`分支已删除：${branch}`));
-          else console.log(ui.warn(`分支 ${branch} 未删除（可能未合并）：${del.stderr.split('\n')[0]}`));
-        }
+        const del = await gitTry(root, ['branch', '-D', branch]);
+        if (del.ok) console.log(ui.ok(`分支已删除：${branch}`));
+        else console.log(ui.warn(`分支 ${branch} 未删除（可能未合并）：${del.stderr.split('\n')[0]}`));
       }),
   );

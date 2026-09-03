@@ -6,6 +6,13 @@
 
 **修改代码前先读本文。**
 
+## 核心模型（单仓模式）
+
+- workspace = **单一 git 仓库**：biz-tech-docs / biz-product-docs / projects / process-docs 都是普通目录
+- **registry.yaml = 外部仓库登记处**（唯一事实源）：只登记 tech-specs 这类公司级外部 submodule；`sync` 把磁盘收敛到声明状态
+- projects 内项目由 `init project` 从模板生成（普通目录 + git add，**不走 submodule**）
+- 跨模块变更一个 PR 天然原子——不存在多仓 PR/分支聚合问题
+
 ## 常用命令
 
 ```bash
@@ -19,16 +26,17 @@ claude plugin validate ../agile-plugins                            # 兄弟插�
 npm run release -- patch --dry-run   # 发版演练（正式发版：npm run release，npm publish 走 GitHub Actions）
 ```
 
-E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace → repo add <本地裸仓库> → sync → template list → init project --template → doctor`，参考 docs/architecture.md「验证清单」。
+E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace → repo add <本地裸仓库> → sync → template list → init project --template → foreach → worktree create → doctor`，参考 docs/architecture.md「验证清单」。
 
 ## 结构
 
 ```
 src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander / MCP SDK）
               paths / schemas(zod) / config / sync / doctor / status /
-              git / task / template-registry / scaffold
+              git / task / template-registry / scaffold / projects
 src/commands/ 命令层（薄壳：参数解析 → 调 core → 输出）
 src/mcp/      MCP Server（复用 core，全部输出 JSON）
+scripts/      release.mjs（发版脚本）
 test/         vitest 单测
 docs/         设计文档
 ```
@@ -36,9 +44,10 @@ docs/         设计文档
 ## 关键约定
 
 - **core 不写 I/O 入口逻辑**：命令层与 MCP 层只做「入口 → 调 core → 输出」，两个入口行为必然一致。
-- **改 sync 行为先改/加 `test/sync.test.ts`；改模板校验先改/加 `test/template-registry.test.ts`。**
-- **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，`git fetch + reset --hard` 刷新，失联降级用缓存，本地目录直读跳过缓存）。
-- **本地项目**：`init project` 未给 `--remote` 时登记 `git@placeholder.local:` 占位 URL；sync/doctor/status 通过 `isPlaceholderUrl()` 特判。
+- **改 sync 行为先改/加 `test/sync.test.ts`；改 projects 遍历先改/加 `test/projects.test.ts`；改模板校验先改/加 `test/template-registry.test.ts`。**
+- **worktree create 自动 sync**（`src/commands/worktree.ts` 的 autoSync）：失败仅警告不阻塞。
+- **task 能力无 CLI 命令**：仅 MCP 工具 `agile_task_create` 暴露（core/task.ts 供 MCP 调用）。
+- **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，fetch+reset 刷新，失联降级用缓存，本地目录直读跳过缓存）。
 - **git 安全默认**：submodule/clone 本地路径统一附加 `-c protocol.file.allow=always`。
 - CLI 输出统一走 `src/ui.ts`；错误用 `AgileError`/`GitError`，消息中文。
 - 版本：`package.json` 与 git tag `vX.Y.Z` 对齐，release workflow 校验。
@@ -47,7 +56,7 @@ docs/         设计文档
 
 | 文档 | 内容 |
 |---|---|
-| docs/architecture.md | 总体架构、与两个外部仓库的解耦、gclient 映射、验证清单 |
-| docs/sync-engine.md | sync 收敛算法、安全设计、hooks 匹配 |
+| docs/architecture.md | 总体架构（单仓模式）、三仓解耦、验证清单 |
+| docs/sync-engine.md | sync 收敛算法、安全设计 |
 | docs/mcp.md | MCP 工具契约与注册方式 |
 | docs/release.md | 发版流程（npm）、CI 说明 |

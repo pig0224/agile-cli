@@ -57,15 +57,14 @@ export async function startMcpServer(): Promise<void> {
     'agile_sync',
     {
       description:
-        '把 workspace 磁盘状态收敛到 .agile/registry.yaml 声明的期望状态（新增/更新/移除 git submodule）。默认 dryRun=true 只返回计划；dryRun=false 时执行。',
+        '同步 registry.yaml 登记的外部仓库（如 tech-specs 等 submodule）：把磁盘状态收敛到声明状态（新增/更新/移除）。默认 dryRun=true 只返回计划；dryRun=false 时执行。',
       inputSchema: {
         dryRun: z.boolean().default(true).describe('true=只返回计划；false=执行'),
         force: z.boolean().default(false).describe('忽略 dirty 仓库强制更新'),
         repo: z.array(z.string()).optional().describe('只同步指定仓库路径'),
-        noHooks: z.boolean().default(false).describe('跳过 post-sync hooks'),
       },
     },
-    async ({ dryRun, force, repo, noHooks }) => {
+    async ({ dryRun, force, repo }) => {
       const { root, error } = rootOrError();
       if (!root) return json({ error });
       const registry = await loadRegistry(root);
@@ -74,7 +73,6 @@ export async function startMcpServer(): Promise<void> {
       const report = await executeSyncPlan(root, registry, plan, {
         only: repo?.length ? repo : undefined,
         force,
-        noHooks,
       });
       return json({ dryRun: false, plan, report });
     },

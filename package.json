@@ -1,7 +1,7 @@
 {
   "name": "fcc-agile-cli",
   "version": "0.1.0",
-  "description": "Agile workspace CLI — one root, five drawers. gclient-style sync over git submodules, worktree management, health checks, project scaffolding from a git template registry, Claude Code plugin install from a git marketplace, and a built-in MCP server for AI agents. (一个根、五个抽屉的 Workspace 生命周期管理 CLI)",
+  "description": "Agile workspace CLI — one root, five drawers. Single-repo workspace with registry-driven external submodule sync, worktree management, health checks, project scaffolding from a git template registry, Claude Code plugin install from a git marketplace, and a built-in MCP server for AI agents. (一个根、五个抽屉的 Workspace 生命周期管理 CLI)",
   "type": "module",
   "bin": {
     "agile": "dist/index.js"
@@ -14,8 +14,6 @@
     "workspace",
     "git",
     "submodule",
-    "gclient",
-    "depot-tools",
     "worktree",
     "monorepo",
     "mcp",

@@ -89,22 +89,4 @@ describe('computeSyncPlan', () => {
     const plan = await computeSyncPlan(dir, REG, { only: ['projects'] });
     expect(plan.adds.map((a) => a.repoPath)).toEqual(['projects/foo']);
   });
-
-  it('本地项目（占位 URL 且已初始化）→ upToDate，不进入 updates', async () => {
-    const dir = await makeWorkspace(
-      '[submodule "projects/local-only"]\n\tpath = projects/local-only\n\turl = git@placeholder.local:projects/local-only.git\n',
-    );
-    const repoDir = path.join(dir, 'projects', 'local-only');
-    await fs.mkdir(path.join(repoDir, '.git'), { recursive: true });
-    const reg: RegistryConfig = {
-      version: 1,
-      repositories: {
-        'projects/local-only': { url: 'git@placeholder.local:projects/local-only.git', branch: 'main' },
-      },
-    };
-    const plan = await computeSyncPlan(dir, reg);
-    expect(plan.updates).toHaveLength(0);
-    expect(plan.upToDate).toContain('projects/local-only');
-    expect(plan.adds).toHaveLength(0);
-  });
 });
