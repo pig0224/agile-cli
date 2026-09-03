@@ -1,6 +1,22 @@
 # 发版流程与 CI/CD
 
 > 只有本仓库（`agile-cli`）发 npm；插件市场与模板注册中心以 git 仓库分发，推送即完成发版。
+> **npm publish 只由 GitHub Actions 执行**（tag 触发），本地不需要也不应该再执行 npm publish。
+
+## 0. 一键发版（推荐）
+
+```bash
+npm run release                      # 交互式，默认 patch
+npm run release -- minor             # 指定 bump 类型
+npm run release -- 0.2.0             # 指定确切版本
+npm run release -- patch --dry-run   # 演练，不实际执行
+```
+
+`scripts/release.mjs` 做的事：
+1. 前置检查：工作区干净 / 在 main / 与 origin 同步 / 目标 tag 不存在
+2. 质量门：typecheck + test + build（与 CI 同款）
+3. bump `package.json` 版本 → `chore(release): vX.Y.Z` commit → 打 tag → 推送
+4. 轮询 GitHub Actions（最长 10 分钟），报告 Release workflow 结论与 npm 包链接
 
 ## 1. CI（[.github/workflows/ci.yml](../.github/workflows/ci.yml)）
 

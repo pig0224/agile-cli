@@ -16,6 +16,7 @@ pnpm typecheck
 node dist/index.js --help
 node dist/index.js template check --registry ../agile-templates   # 兄弟模板仓库直读模式
 claude plugin validate ../agile-plugins                            # 兄弟插件市场校验
+npm run release -- patch --dry-run   # 发版演练（正式发版：npm run release，npm publish 走 GitHub Actions）
 ```
 
 E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace → repo add <本地裸仓库> → sync → template list → init project --template → doctor`，参考 docs/architecture.md「验证清单」。
