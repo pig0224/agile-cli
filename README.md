@@ -1,7 +1,7 @@
 # @fcc/agile
 
-[![CI](https://github.com/fcc-agile/agile-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/fcc-agile/agile-cli/actions/workflows/ci.yml)
-[![Release](https://github.com/fcc-agile/agile-cli/actions/workflows/release.yml/badge.svg)](https://github.com/fcc-agile/agile-cli/actions/workflows/release.yml)
+[![CI](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml)
+[![Release](https://github.com/pig0224/agile-cli/actions/workflows/release.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/release.yml)
 [![npm](https://img.shields.io/npm/v/@fcc/agile.svg)](https://www.npmjs.com/package/@fcc/agile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -11,8 +11,8 @@
 
 | 仓库 | 职责 |
 |---|---|
-| [agile-plugin](https://github.com/fcc-agile/agile-plugin) | Claude Code 插件市场（SDD/TDD 插件） |
-| [agile-templates](https://github.com/fcc-agile/agile-templates) | 项目模板注册中心（registry.yaml + 模板目录） |
+| [agile-plugin](https://github.com/pig0224/agile-plugin) | Claude Code 插件市场（SDD/TDD 插件） |
+| [agile-templates](https://github.com/pig0224/agile-templates) | 项目模板注册中心（registry.yaml + 模板目录） |
 
 ## 安装
 

@@ -1,6 +1,6 @@
 # 总体架构
 
-> `@fcc/agile`（本仓库）+ 外部两个 git 仓库（[agile-plugin](https://github.com/fcc-agile/agile-plugin) 插件市场、[agile-agile-templates](https://github.com/fcc-agile/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
+> `@fcc/agile`（本仓库）+ 外部两个 git 仓库（[agile-plugin](https://github.com/pig0224/agile-plugin) 插件市场、[agile-templates](https://github.com/pig0224/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
 
 ## 1. 三仓解耦
 
@@ -14,9 +14,9 @@
 
 ```yaml
 plugin:
-  marketplace: https://github.com/fcc-agile/agile-plugin.git   # 插件市场
+  marketplace: https://github.com/pig0224/agile-plugin.git   # 插件市场
 templates:
-  registry: https://github.com/fcc-agile/agile-templates.git  # 模板源
+  registry: https://github.com/pig0224/agile-templates.git  # 模板源
 ```
 
 CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplace add <地址>` + `claude plugin install <name>@<市场名>`；使用模板 = clone 模板仓库读 registry.yaml。新增插件/模板对 CLI 完全透明，用户可将两个地址换成团队私有仓库。
