@@ -8,7 +8,7 @@ import * as ui from '../ui.js';
 /** 内置插件名（agile 插件市场中的 SDD/TDD 主插件） */
 const BUILTIN = 'agile';
 /** 本团队市场的固定名称（claude plugin install <name>@<marketplace>） */
-const MARKETPLACE_NAME = 'fcc-agile';
+const MARKETPLACE_NAME = 'fcc';
 
 export const pluginCommand = new Command('plugin')
   .description('Claude Code 插件管理（插件市场为独立 git 仓库，新增插件无需升级 CLI）')

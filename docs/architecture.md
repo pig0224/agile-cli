@@ -1,12 +1,12 @@
 # 总体架构
 
-> `@fcc/agile-cli`（本仓库）+ 外部两个 git 仓库（[agile-plugins](https://github.com/pig0224/agile-plugins) 插件市场、[agile-templates](https://github.com/pig0224/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
+> `agile-cli`（本仓库）+ 外部两个 git 仓库（[agile-plugins](https://github.com/pig0224/agile-plugins) 插件市场、[agile-templates](https://github.com/pig0224/agile-templates) 模板注册中心）组成完整体系。三者解耦：只有本仓库发 npm，插件与模板的扩展不影响本仓库。
 
 ## 1. 三仓解耦
 
 | 交付物 | 分发载体 | 扩展方式 | 本仓库是否需要发版 |
 |---|---|---|---|
-| `@fcc/agile-cli`（CLI，本仓库） | npm | —（本体） | — |
+| `agile-cli`（CLI，本仓库） | npm | —（本体） | — |
 | agile-plugins（插件市场） | git 仓库 | 加 `plugins/<name>/` + 登记 marketplace.json | ❌ |
 | agile-templates（模板库） | git 仓库 | 加 `<模板名>/` + 登记 registry.yaml | ❌ |
 
