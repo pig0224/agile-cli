@@ -117,4 +117,4 @@ node dist/index.js template check --registry ../agile-templates   # 用兄弟仓
 
 ## License
 
-[MIT](./LICENSE) © fcc contributors
+[MIT](./LICENSE) © FCC contributors
