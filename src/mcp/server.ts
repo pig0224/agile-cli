@@ -97,6 +97,34 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.registerTool(
+    'agile_template_list',
+    {
+      description:
+        '列出项目模板注册中心的全部可用模板（agile init project --template <模板名> 使用）。模板来自 workspace.yaml templates.registry 指向的 git 仓库。',
+      inputSchema: {
+        refresh: z.boolean().default(false).describe('是否联网刷新模板缓存'),
+      },
+    },
+    async ({ refresh }) => {
+      const { root, error } = rootOrError();
+      if (!root) return json({ error });
+      const workspace = await loadWorkspace(root);
+      const { loadTemplates } = await import('../core/template-registry.js');
+      try {
+        const result = await loadTemplates(workspace.templates.registry, { refresh });
+        return json({
+          registry: workspace.templates.registry,
+          templates: result.registry.templates,
+          issues: result.issues,
+          stale: result.stale,
+        });
+      } catch (e) {
+        return json({ error: (e as Error).message });
+      }
+    },
+  );
+
+  server.registerTool(
     'agile_task_create',
     {
       description: '在 process-docs 下创建需求编号目录（STO-xxx）及标准五文档：requirement/design/implementation/review/release.md。',

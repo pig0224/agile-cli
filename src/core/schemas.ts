@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DEFAULT_PATHS } from './paths.js';
+import { DEFAULT_PATHS, DEFAULT_PLUGIN_MARKETPLACE, DEFAULT_TEMPLATE_REGISTRY } from './paths.js';
 
 export const PathsSchema = z
   .object({
@@ -23,6 +23,18 @@ export const WorkspaceSchema = z.object({
   created: z.string(),
   defaultBranch: z.string().default('main'),
   paths: PathsSchema,
+  /** 插件市场（git 仓库，含 .claude-plugin/marketplace.json） */
+  plugin: z
+    .object({
+      marketplace: z.string().default(DEFAULT_PLUGIN_MARKETPLACE),
+    })
+    .default({ marketplace: DEFAULT_PLUGIN_MARKETPLACE }),
+  /** 项目模板注册中心（git 仓库，含 registry.yaml） */
+  templates: z
+    .object({
+      registry: z.string().default(DEFAULT_TEMPLATE_REGISTRY),
+    })
+    .default({ registry: DEFAULT_TEMPLATE_REGISTRY }),
   hooks: z.array(HookSchema).default([]),
 });
 

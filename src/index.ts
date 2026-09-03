@@ -10,6 +10,7 @@ import { configCommand } from './commands/config.js';
 import { doctorCommand } from './commands/doctor.js';
 import { worktreeCommand } from './commands/worktree.js';
 import { taskCommand } from './commands/task.js';
+import { templateCommand } from './commands/template.js';
 import { foreachCommand } from './commands/foreach.js';
 import { hooksCommand } from './commands/hooks.js';
 import { pluginCommand } from './commands/plugin.js';
@@ -31,6 +32,7 @@ program
   .addCommand(doctorCommand)
   .addCommand(worktreeCommand)
   .addCommand(taskCommand)
+  .addCommand(templateCommand)
   .addCommand(foreachCommand)
   .addCommand(hooksCommand)
   .addCommand(pluginCommand)

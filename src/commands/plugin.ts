@@ -1,99 +1,64 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { createRequire } from 'node:module';
 import { execa } from 'execa';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
 import { requireWorkspaceRoot } from '../core/paths.js';
-import { loadPluginFile, savePluginFile } from '../core/config.js';
+import { loadPluginFile, loadWorkspace, savePluginFile } from '../core/config.js';
 import * as ui from '../ui.js';
 
-const require = createRequire(import.meta.url);
-
-/** 内置插件名（@fcc/agile-plugin npm 包，随 @fcc/agile 一起安装） */
+/** 内置插件名（agile 插件市场中的 SDD/TDD 主插件） */
 const BUILTIN = 'agile';
-const MARKETPLACE = 'fcc-agile';
-
-async function readJson(file: string): Promise<Record<string, unknown>> {
-  try {
-    return JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * 解析随 CLI 依赖安装的 @fcc/agile-plugin 包目录。
- * 通过 node 模块解析定位（node_modules/@fcc/agile-plugin），
- * 与发布形态一致：npm install -g @fcc/agile 后即存在。
- */
-function builtinPluginDir(): string {
-  try {
-    const pkgJson = require.resolve('@fcc/agile-plugin/package.json');
-    return path.dirname(pkgJson);
-  } catch {
-    throw new AgileError(
-      '未找到 @fcc/agile-plugin 包。它应作为 @fcc/agile 的依赖自动安装；' +
-        '若为本地开发，请先在仓库根执行 pnpm install。',
-    );
-  }
-}
-
-/** 通过 claude CLI 注册本地 marketplace 并安装插件 */
-async function installViaClaudeCli(pluginDir: string, pluginName: string): Promise<boolean> {
-  const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
-  const add = await execa(claude, ['plugin', 'marketplace', 'add', pluginDir], {
-    reject: false,
-    timeout: 60_000,
-    windowsHide: true,
-  });
-  if (add.exitCode !== 0) return false;
-  const install = await execa(claude, ['plugin', 'install', `${pluginName}@${MARKETPLACE}`], {
-    reject: false,
-    timeout: 60_000,
-    windowsHide: true,
-  });
-  return install.exitCode === 0;
-}
+/** 本团队市场的固定名称（claude plugin install <name>@<marketplace>） */
+const MARKETPLACE_NAME = 'fcc-agile';
 
 export const pluginCommand = new Command('plugin')
-  .description('Claude Code 插件管理（安装 agile plugin 或后期新增的 plugin）')
+  .description('Claude Code 插件管理（插件市场为独立 git 仓库，新增插件无需升级 CLI）')
   .addCommand(
     new Command('install')
-      .description('安装插件（默认 agile，随 CLI 的 npm 依赖分发；后续支持 git URL / npm 包名）')
-      .argument('[source]', '插件来源：插件名', BUILTIN)
-      .action(async (source: string) => {
+      .description('从插件市场（git 仓库）安装插件，默认 agile')
+      .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
+      .option('--marketplace <url>', '插件市场 git 地址（默认 workspace.yaml plugin.marketplace）')
+      .option('--marketplace-name <name>', '市场名称（claude plugin install 的 @ 后缀）', MARKETPLACE_NAME)
+      .action(async (name: string, opts: { marketplace?: string; marketplaceName: string }) => {
         const root = requireWorkspaceRoot();
 
-        if (source !== BUILTIN) {
-          throw new AgileError(`暂不支持从 ${source} 安装插件。当前内置：${BUILTIN}（第三方插件后续版本支持）。`);
+        // 1. 解析市场地址：--marketplace 参数 > workspace.yaml plugin.marketplace
+        const workspace = await loadWorkspace(root);
+        const marketplaceUrl = opts.marketplace ?? workspace.plugin.marketplace;
+
+        // 2. 注册市场 + 安装插件（本地路径与 git URL 均可，claude CLI 自行处理）
+        const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
+        const add = await execa(claude, ['plugin', 'marketplace', 'add', marketplaceUrl], {
+          reject: false,
+          timeout: 120_000,
+          windowsHide: true,
+        });
+        if (add.exitCode !== 0) {
+          console.log(ui.warn('注册插件市场失败，请手动执行：'));
+          console.log(ui.dim(`  claude plugin marketplace add ${marketplaceUrl}`));
+          console.log(ui.dim(`  claude plugin install ${name}@${opts.marketplaceName}`));
+          console.log(ui.dim(`失败原因：${(add.stderr || add.stdout || '').split('\n')[0]}`));
+        } else {
+          const install = await execa(claude, ['plugin', 'install', `${name}@${opts.marketplaceName}`], {
+            reject: false,
+            timeout: 120_000,
+            windowsHide: true,
+          });
+          if (install.exitCode !== 0) {
+            console.log(ui.warn(`安装插件 ${name} 失败，请手动执行：`));
+            console.log(ui.dim(`  claude plugin install ${name}@${opts.marketplaceName}`));
+            console.log(ui.dim(`失败原因：${(install.stderr || install.stdout || '').split('\n')[0]}`));
+          }
         }
 
-        // 1. 解析插件包目录与插件名
-        const pluginDir = builtinPluginDir();
-        const manifest = await readJson(path.join(pluginDir, '.claude-plugin', 'plugin.json'));
-        if (!manifest.name) {
-          throw new AgileError(`插件清单缺失：${path.join(pluginDir, '.claude-plugin', 'plugin.json')} 中无 name 字段。`);
-        }
-        const pluginName = manifest.name as string;
-
-        // 2. 通过 claude CLI 安装（marketplace add + install）
-        const installed = await installViaClaudeCli(pluginDir, pluginName);
-        if (!installed) {
-          console.log(ui.warn('未能通过 claude CLI 自动安装，请手动执行：'));
-          console.log(ui.dim(`  claude plugin marketplace add ${pluginDir}`));
-          console.log(ui.dim(`  claude plugin install ${pluginName}@${MARKETPLACE}`));
-        }
-
-        // 3. 记录到 .agile/plugin.yaml
+        // 3. 记录到 .agile/plugin.yaml（source = 市场 git 地址）
         const data = (await loadPluginFile(root)) ?? { version: 1, plugins: {} };
-        data.plugins[pluginName] = {
-          source: pluginDir.replace(/\\/g, '/'),
+        data.plugins[name] = {
+          source: marketplaceUrl,
           enabled: true,
         };
         await savePluginFile(root, data);
 
-        console.log(ui.ok(`插件 ${pluginName} 已安装（marketplace: ${MARKETPLACE}）`));
+        console.log(ui.ok(`插件 ${name} 已安装（市场：${marketplaceUrl}）`));
         console.log(ui.dim('重启 Claude Code 会话后即可使用 /agile:xxx 系列命令。'));
       }),
   )
@@ -108,7 +73,7 @@ export const pluginCommand = new Command('plugin')
         data.plugins[name]!.enabled = true;
         await savePluginFile(root, data);
         const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
-        await execa(claude, ['plugin', 'enable', `${name}@${MARKETPLACE}`], { reject: false, windowsHide: true });
+        await execa(claude, ['plugin', 'enable', `${name}@${MARKETPLACE_NAME}`], { reject: false, windowsHide: true });
         console.log(ui.ok(`插件 ${name} 已启用`));
       }),
   )
@@ -123,15 +88,18 @@ export const pluginCommand = new Command('plugin')
         data.plugins[name]!.enabled = false;
         await savePluginFile(root, data);
         const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
-        await execa(claude, ['plugin', 'disable', `${name}@${MARKETPLACE}`], { reject: false, windowsHide: true });
+        await execa(claude, ['plugin', 'disable', `${name}@${MARKETPLACE_NAME}`], { reject: false, windowsHide: true });
         console.log(ui.ok(`插件 ${name} 已禁用`));
       }),
   )
   .addCommand(
     new Command('list')
-      .description('列出 .agile/plugin.yaml 中登记的插件')
+      .description('列出 .agile/plugin.yaml 中登记的插件与市场地址')
       .action(async () => {
         const root = requireWorkspaceRoot();
+        const workspace = await loadWorkspace(root);
+        console.log(ui.bold(`插件市场：${workspace.plugin.marketplace}`));
+        console.log('');
         const data = await loadPluginFile(root);
         if (!data || Object.keys(data.plugins).length === 0) {
           console.log(ui.dim('（未安装任何插件；运行 agile plugin install agile）'));
@@ -139,7 +107,7 @@ export const pluginCommand = new Command('plugin')
         }
         for (const [name, p] of Object.entries(data.plugins)) {
           const state = p.enabled ? ui.ok('启用') : ui.warn('禁用');
-          console.log(`  ${state} ${name}（${p.source}）`);
+          console.log(`  ${state} ${name}（source: ${p.source}）`);
         }
       }),
   );

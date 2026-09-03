@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { AgileError } from './errors.js';
 
@@ -16,6 +17,19 @@ export const DEFAULT_PATHS = {
 } as const;
 
 export const DRAWER_PATHS = Object.values(DEFAULT_PATHS);
+
+/**
+ * 默认插件市场 / 模板注册中心的 git 地址（占位，发布前替换为实际仓库）。
+ * workspace.yaml 可覆盖（plugin.marketplace / templates.registry），
+ * 新增插件或模板只需更新这两个仓库，CLI 无需发版。
+ */
+export const DEFAULT_PLUGIN_MARKETPLACE = 'https://github.com/fcc-agile/agile-plugin.git';
+export const DEFAULT_TEMPLATE_REGISTRY = 'https://github.com/fcc-agile/agile-templates.git';
+
+/** 模板仓库的用户级缓存根目录（跨 workspace 共享） */
+export function templateCacheRoot(): string {
+  return path.join(os.homedir(), '.agile', 'templates');
+}
 
 /**
  * 占位远端地址前缀：init project 未提供 --remote 时登记的本地项目标记。

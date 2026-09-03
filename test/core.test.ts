@@ -8,7 +8,6 @@ import { RegistrySchema, WorkspaceSchema } from '../src/core/schemas.js';
 import { parseGitmodules } from '../src/core/gitmodules.js';
 import { matchRepo } from '../src/core/sync.js';
 import { AgileError } from '../src/core/errors.js';
-import { scaffoldProject, PROJECT_TYPES } from '../src/core/templates.js';
 import { createTaskDocs, TASK_ID_RE } from '../src/core/task.js';
 
 function tmp(): Promise<string> {
@@ -84,30 +83,6 @@ describe('matchRepo', () => {
     expect(matchRepo('projects/**', 'projects/foo/bar')).toBe(true);
     expect(matchRepo('tech-specs', 'tech-specs')).toBe(true);
     expect(matchRepo('tech-specs', 'tech-specs/sub')).toBe(false);
-  });
-});
-
-describe('templates', () => {
-  it.each(PROJECT_TYPES)('%s 模板占位符替换', async (type) => {
-    const dir = await tmp();
-    await scaffoldProject(path.join(dir, type), `demo-${type}`, type);
-    // 检查生成的文本文件不再含占位符
-    const files: string[] = [];
-    async function walk(d: string) {
-      for (const e of await fs.readdir(d, { withFileTypes: true })) {
-        const p = path.join(d, e.name);
-        if (e.isDirectory()) await walk(p);
-        else if (/\.(json|ts|tsx|go|xml|md|mod|yml|java)$/.test(e.name)) files.push(p);
-      }
-    }
-    await walk(path.join(dir, type));
-    expect(files.length).toBeGreaterThan(0);
-    for (const f of files) {
-      const content = await fs.readFile(f, 'utf8');
-      // 注：JSX 的 style={{...}} 合法含 "{{"，只断言模板占位符已消失
-      expect(content, `${f} 仍含占位符`).not.toContain('{{name}}');
-      expect(content, `${f} 仍含占位符`).not.toContain('{{safeName}}');
-    }
   });
 });
 
