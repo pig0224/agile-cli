@@ -1,0 +1,10 @@
+{
+  "name": "agile",
+  "description": "SDD/TDD 研发流程插件：一个根、五个抽屉。覆盖 PRD → 技术设计 → 前后端 TDD 开发 → 测试验收 → 问题反馈全流程",
+  "version": "0.1.0",
+  "author": {
+    "name": "fcc-agile"
+  },
+  "homepage": "https://example.com/fcc-agile",
+  "keywords": ["sdd", "tdd", "workflow", "chinese"]
+}
