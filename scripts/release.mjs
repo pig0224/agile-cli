@@ -16,7 +16,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readline } from 'node:readline/promises';
+import { createInterface } from 'node:readline/promises';
 import { execa } from 'execa';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -55,7 +55,7 @@ function bump(version, type) {
 }
 
 async function ask(question, fallback) {
-  const rl = readline({ input: process.stdin, output: process.stdout });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = (await rl.question(`${question}${fallback ? `（回车=${fallback}）` : ''}: `)).trim();
   rl.close();
   return answer || fallback || '';
