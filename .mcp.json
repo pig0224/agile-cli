@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agile": {
+      "command": "node",
+      "args": ["dist/index.js", "mcp"]
+    }
+  }
+}
