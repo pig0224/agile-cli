@@ -1,6 +1,6 @@
 # CLAUDE.md — agile-cli 仓库导航
 
-本仓库 = `@fcc/agilecli`（npm 包，bin: `agile`）。配套仓库（独立 git 仓库，非本仓库的一部分）：
+本仓库 = `@fcc/agile-cli`（npm 包，bin: `agile`）。配套仓库（独立 git 仓库，非本仓库的一部分）：
 - `agile-plugins`（Claude Code 插件市场）：`src/core/paths.ts` 的 `DEFAULT_PLUGIN_MARKETPLACE` 指向其地址
 - `agile-templates`（项目模板注册中心）：`DEFAULT_TEMPLATE_REGISTRY` 指向其地址
 
