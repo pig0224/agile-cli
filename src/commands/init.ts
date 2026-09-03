@@ -103,7 +103,8 @@ export const initCommand = new Command('init')
       .argument('<name>', '项目名（将作为 projects/ 下的目录名）')
       .requiredOption('--template <template>', '模板名（agile template list 查看；模板来自 templates.registry 指向的 git 仓库）')
       .option('--registry <url>', '模板仓库 git URL（默认 workspace.yaml templates.registry）')
-      .action(async (name: string, opts: { template: string; registry?: string }) => {
+      .option('--refresh', '联网刷新模板缓存（默认走本地缓存；agile template update 可强制刷新）')
+      .action(async (name: string, opts: { template: string; registry?: string; refresh?: boolean }) => {
         const root = requireWorkspaceRoot();
         if (!TEMPLATE_NAME_RE.test(opts.template)) {
           throw new AgileError(`模板名不合法（格式 ^[a-z][a-z0-9-]*$）：${opts.template}`);
@@ -118,8 +119,8 @@ export const initCommand = new Command('init')
         // 1. 解析模板源（--registry 参数 > workspace.yaml）
         const templateUrl = opts.registry ?? workspace.templates.registry;
 
-        // 2. 加载模板注册中心（克隆/更新缓存到 ~/.agile/templates/）
-        const { registry: tplRegistry, repoDir, issues } = await loadTemplates(templateUrl);
+        // 2. 加载模板注册中心（默认走本地缓存；--refresh 时联网刷新）
+        const { registry: tplRegistry, repoDir, issues } = await loadTemplates(templateUrl, { refresh: opts.refresh === true });
         if (issues.length > 0) {
           throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
         }

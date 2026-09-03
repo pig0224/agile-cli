@@ -1,4 +1,4 @@
-# fcc-agile-cli
+# FCC-Agile-Cli
 
 [![CI](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml)
 [![Release](https://github.com/pig0224/agile-cli/actions/workflows/release.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/release.yml)

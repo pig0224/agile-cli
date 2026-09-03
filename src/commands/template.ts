@@ -16,13 +16,13 @@ export const templateCommand = new Command('template')
   .description('项目模板注册中心管理（模板来自独立 git 仓库，新增模板无需升级 CLI）')
   .addCommand(
     new Command('list')
-      .description('列出模板注册中心的全部可用模板')
+      .description('列出模板注册中心的全部可用模板（默认读本地缓存，--refresh 联网刷新）')
       .option('--registry <url>', '模板仓库 git URL（默认 workspace.yaml templates.registry）')
-      .option('--no-refresh', '只读本地缓存，不联网刷新')
+      .option('--refresh', '联网刷新模板缓存（默认走缓存）')
       .option('--json', '输出 JSON（供 AI / MCP 消费）')
       .action(async (opts: { registry?: string; refresh?: boolean; json?: boolean }) => {
         const url = await resolveRegistryUrl(opts.registry);
-        const { registry, issues, stale } = await loadTemplates(url, { refresh: opts.refresh });
+        const { registry, issues, stale } = await loadTemplates(url, { refresh: opts.refresh === true });
         if (stale) console.log(ui.warn('模板仓库同步失败，使用本地缓存。'));
 
         if (opts.json) {
@@ -49,7 +49,7 @@ export const templateCommand = new Command('template')
   )
   .addCommand(
     new Command('update')
-      .description('强制刷新模板缓存（拉取注册中心仓库最新版本）')
+      .description('强制刷新模板缓存（拉取注册中心仓库最新版本，等价 list --refresh）')
       .option('--registry <url>', '模板仓库 git URL（默认 workspace.yaml templates.registry）')
       .action(async (opts: { registry?: string }) => {
         const url = await resolveRegistryUrl(opts.registry);

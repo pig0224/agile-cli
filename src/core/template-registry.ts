@@ -50,8 +50,9 @@ export function templateCacheDir(url: string): string {
 /**
  * 确保模板仓库在本地缓存可用：
  * - 无缓存 → git clone --depth 1
- * - 有缓存 → git fetch + reset --hard origin/HEAD（缓存是纯只读副本，强重置安全）
- * - 同步失败且已有缓存 → 降级用缓存（stale=true）
+ * - 有缓存且 refresh=true → git fetch + reset --hard origin/HEAD（缓存是纯只读副本，强重置安全）
+ * - 有缓存且未要求刷新 → 直接用缓存（默认行为：不联网）
+ * - refresh=true 但 fetch 失败 → 降级用缓存（stale=true）
  */
 export async function ensureTemplateRepo(
   url: string,
@@ -74,8 +75,8 @@ export async function ensureTemplateRepo(
     return { repoDir: dir, stale: false };
   }
 
-  if (opts.refresh === false) {
-    // 不要求刷新：直接用现有缓存
+  if (opts.refresh !== true) {
+    // 默认走缓存：不联网
     return { repoDir: dir, stale: false };
   }
 
@@ -84,7 +85,7 @@ export async function ensureTemplateRepo(
     await git(dir, ['reset', '--hard', 'FETCH_HEAD']);
     return { repoDir: dir, stale: false };
   }
-  // 失联：降级使用缓存（首次 clone 不会走到这里）
+  // 刷新失败：降级使用缓存
   return { repoDir: dir, stale: true };
 }
 
