@@ -44,7 +44,6 @@ agile init project order-service --template go-service
 # 5. 日常
 agile status                    # 各仓库 branch/commit/dirty/pin 总览
 agile worktree create projects/order-service feature/STO-001   # 隔离开发环境
-agile task create STO-001       # process-docs/STO-001 五文档骨架
 agile doctor                    # 健康检查（配置/权限/漂移），--fix 自动修复
 
 # 6. 安装 Claude Code 插件（SDD/TDD 流程，来自插件市场 git 仓库）
@@ -82,7 +81,6 @@ my-workspace/                    # Workspace 根 Git Repo
 | `agile config get/set/list/unset` | workspace.yaml 增删改查 |
 | `agile doctor [--fix] [--offline]` | 健康检查：配置校验、远端权限、三方漂移 |
 | `agile worktree create/list/remove` | git worktree 开发环境管理 |
-| `agile task create/list/status` | 过程产物任务目录（STO-xxx 五文档模板） |
 | `agile hooks run/list` | post-sync 钩子（≈ gclient runhooks） |
 | `agile foreach '<cmd>' [--group glob]` | 遍历仓库执行命令（≈ gclient recurse） |
 | `agile plugin install/enable/disable/list` | 插件管理（市场 = git 仓库，`--marketplace` 可换源） |

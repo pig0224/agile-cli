@@ -80,7 +80,7 @@ agile status / agile doctor --offline
 agile template list           # 从模板源拉取注册中心
 agile init project order-service --template go-service
 agile worktree create projects/order-service feature/STO-001 && remove
-agile task create STO-001
 agile plugin install agile --marketplace ../agile-plugins
+node dist/index.js mcp        # JSON-RPC initialize + tools/list；tools/call agile_task_create（task 能力仅 MCP 暴露）
 node dist/index.js mcp        # JSON-RPC initialize + tools/list + agile_status
 ```

@@ -21,7 +21,7 @@ const DRAWER_READMES: Record<string, string> = {
   'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范。\nGit Submodule，团队技术负责人维护。\n',
   'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范。\nGit Submodule，产品团队维护。\n',
   projects: '# 抽屉四：团队项目代码\n\n多个微服务/前端项目平铺于此，各自为 Git Submodule。\n使用 `agile init project <name> --template <模板名>` 创建（agile template list 查看模板）。\n',
-  'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档，直接保存在 Workspace 根仓库。\n使用 `agile task create STO-001` 生成标准目录。\n',
+  'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档，直接保存在 Workspace 根仓库。\n标准目录由 Claude Code 插件命令 /agile:sync-req 或 MCP 工具 agile_task_create 生成。\n',
 };
 
 async function exists(p: string): Promise<boolean> {

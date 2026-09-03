@@ -3,13 +3,13 @@ import path from 'node:path';
 import { AgileError } from './errors.js';
 import { loadWorkspace } from './config.js';
 
-/** 过程产物标准五文档 */
+/** 过程产物标准五文档（本模块不注册 CLI 命令，仅由 MCP 工具 agile_task_create 暴露） */
 export const TASK_DOCS: Array<{ file: string; template: string }> = [
   {
     file: 'requirement.md',
     template: `# {{id}} 需求说明
 
-> 由 agile task create 生成，agile:prd / agile:sync-req 会填充此文档。
+> 由 MCP 工具 agile_task_create 生成，agile:prd / agile:sync-req 会填充此文档。
 
 ## 背景
 
