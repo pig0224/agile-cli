@@ -1,0 +1,42 @@
+name: Bug 报告
+description: 报告一个缺陷
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢反馈！请尽量填写以下信息，便于快速定位。建议先运行 `agile doctor --json` 附上输出。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么？
+      description: 现象与期望行为的差异；报错请附完整输出
+      placeholder: 执行 agile sync 时报错 …（完整报错输出）
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. agile init workspace
+        2. agile repo add …
+        3. agile sync
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境信息
+      description: OS / Node 版本 / git 版本 / `agile version` 输出
+      placeholder: Windows 10 · Node 20.11 · git 2.41 · agile-cli 0.1.1
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重程度
+      options:
+        - P0 阻塞（无法使用）
+        - P1 严重（核心功能受损）
+        - P2 一般（有绕行方案）
+        - P3 轻微（体验/文档）
+    validations:
+      required: true
