@@ -55,6 +55,15 @@ describe('buildChangelogSection', () => {
     expect(md.indexOf('Features')).toBeLessThan(md.indexOf('Bug Fixes'));
   });
 
+  it('提供 commitUrl 时 hash 渲染为可点击链接', () => {
+    const md = buildChangelogSection('1.1.0', '2026-09-04', commits, {
+      commitUrl: 'https://github.com/pig0224/agile-cli/commit/',
+    });
+    expect(md).toContain(
+      '[`aaa1111`](https://github.com/pig0224/agile-cli/commit/aaa1111222233334444455556666777788889999)',
+    );
+  });
+
   it('空提交返回空串', () => {
     expect(buildChangelogSection('1.0.0', '2026-09-04', [])).toBe('');
   });

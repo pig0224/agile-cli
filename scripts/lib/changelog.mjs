@@ -66,19 +66,27 @@ function bumpTypeOfSection(commits) {
 
 /**
  * 渲染一个版本的 CHANGELOG 段落（Markdown）。
+ * @param {object} opts
+ * @param {string} [opts.commitUrl] commit 链接前缀（如 https://github.com/owner/repo/commit/），
+ *        提供时 hash 渲染为可点击链接（npmjs.com 渲染 CHANGELOG 不会自动链接裸 SHA）
  * @returns {string} 形如 "## v1.1.0 (2026-09-04)\n\n### ..." 的段落（以空行结尾）
  */
-export function buildChangelogSection(version, date, commits) {
+export function buildChangelogSection(version, date, commits, opts = {}) {
   const parsed = parseCommits(commits);
   if (parsed.length === 0) return '';
   const bumpType = bumpTypeOfSection(parsed);
+  const commitUrl = opts.commitUrl;
+  const item = (c) => {
+    const short = c.sha.slice(0, 7);
+    return commitUrl ? `${c.subject} ([\`${short}\`](${commitUrl}${c.sha}))` : `${c.subject} (${short})`;
+  };
   const lines = [`## v${version} (${date})`, '', `> bump: ${bumpType}`, ''];
   for (const g of GROUP_ORDER) {
     const items = parsed.filter((c) => groupOf(c) === g.key);
     if (items.length === 0) continue;
     lines.push(`### ${g.title}`, '');
     for (const c of items) {
-      lines.push(`- ${c.subject} (${c.sha.slice(0, 7)})`);
+      lines.push(`- ${item(c)}`);
     }
     lines.push('');
   }

@@ -85,21 +85,15 @@ async function collectCommitsSinceLastTag() {
     });
 }
 
-/** 在 CHANGELOG.md 顶部插入新版本段落（文件不存在则创建） */
+/** 在 CHANGELOG.md 顶部插入新版本段落（文件不存在则创建；文件内容仅由版本段落组成） */
 async function writeChangelog(section) {
-  let content = '# Changelog\n\n';
+  let content = '';
   try {
     content = await fs.readFile(CHANGELOG_FILE, 'utf8');
   } catch {
     /* 首次创建 */
   }
-  const header = '# Changelog\n';
-  if (content.startsWith(header)) {
-    content = header + '\n' + section + content.slice(header.length);
-  } else {
-    content = section + '\n' + content;
-  }
-  await fs.writeFile(CHANGELOG_FILE, content, 'utf8');
+  await fs.writeFile(CHANGELOG_FILE, section + content, 'utf8');
 }
 
 /** 轮询 GitHub Actions Release workflow 的结论 */
@@ -187,7 +181,8 @@ async function main() {
   }
 
   // ---------- 4. CHANGELOG 段落预览 ----------
-  const section = buildChangelogSection(next, new Date().toISOString().slice(0, 10), commits);
+  const commitUrl = `https://github.com/${repo.owner}/${repo.repo}/commit/`;
+  const section = buildChangelogSection(next, new Date().toISOString().slice(0, 10), commits, { commitUrl });
   log('');
   log(section);
   log('');
