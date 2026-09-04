@@ -6,32 +6,51 @@ on:
       - 'v*'
 
 jobs:
-  # 守门：等待同 commit 的 CI 跑完且通过，才允许进入发布
-  wait-for-ci:
-    name: Wait for CI gate
+  validate:
+    name: Validate before release
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for CI to pass on this commit
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: CLI smoke test
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHA="${{ github.sha }}"
-          for i in $(seq 1 40); do
-            LINE=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SHA&per_page=10" \
-              --jq '[.workflow_runs[] | select(.name == "CI")] | sort_by(.created_at) | last | "\(.status) \(.conclusion // "pending")"' 2>/dev/null || echo "pending")
-            echo "[$i] CI 状态：$LINE"
-            case "$LINE" in
-              "completed success") echo "CI 已通过，放行发布"; exit 0 ;;
-              completed*) echo "CI 未通过（$LINE），禁止发布"; exit 1 ;;
-            esac
-            sleep 15
-          done
-          echo "等待 CI 超时（10 分钟）"; exit 1
+          node dist/index.js --version
+          node dist/index.js --help > /dev/null
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            | node dist/index.js mcp | head -c 200
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
 
   publish:
     name: Publish agile-cli to npm & create GitHub Release
-    needs: wait-for-ci
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -60,14 +79,16 @@ jobs:
             exit 1
           fi
 
-      # typecheck/test 由 main 上的 CI 已对该 commit 验证（wait-for-ci 守门确认），此处不重复
-      - name: Build
-        run: pnpm build
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
       - name: Extract release notes from CHANGELOG
         run: node scripts/extract-release-notes.mjs "$GITHUB_REF_NAME" RELEASE_NOTES.md
 
-      - name: Publish fcc-agile-cli
+      - name: Publish to npm
         run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
