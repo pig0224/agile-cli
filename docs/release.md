@@ -21,7 +21,7 @@ npm run release -- patch --dry-run   # 演练，不实际执行
 4. 写入 CHANGELOG.md → bump package.json → `chore(release): vX.Y.Z` commit → 打 tag → 推送
 5. 提交后自检：HEAD 内 package.json 版本必须等于目标版本（防 tag 与版本脱节）
 
-push 后由 release.yml 完成：wait-for-ci（等待 CI 通过）→ build → 发 npm → GitHub Release（notes 取自 CHANGELOG 对应段落）。
+push 后由 release.yml 完成：validate（质量门）→ publish（发 npm → GitHub Release，notes 取自 CHANGELOG 对应段落）。
 
 ## 1. CI（[.github/workflows/ci.yml](../.github/workflows/ci.yml)）
 
@@ -31,14 +31,10 @@ push 后由 release.yml 完成：wait-for-ci（等待 CI 通过）→ build → 
 
 ## 2. Release（[.github/workflows/release.yml](../.github/workflows/release.yml)）
 
-触发：推送 `v*` tag（由发版脚本创建）。
+触发：推送 `v*` tag（由发版脚本创建）。两个 job 串行，全部通过才发布：
 
-流程：
-1. **wait-for-ci**：轮询等待同 commit 的 CI 跑完且通过（最长 10 分钟，失败/超时即终止，禁止发布）
-2. 校验 `package.json` 版本号与 tag 一致
-3. `pnpm build` + 提取 CHANGELOG 对应段落作为 Release notes
-4. `pnpm publish --access public`
-5. `softprops/action-gh-release` 创建 GitHub Release
+1. **validate**：install → typecheck → test → build → CLI 冒烟（--version / --help / MCP initialize）→ 上传 dist artifact（不再依赖 CI workflow，自身跑完整质量门）
+2. **publish**（needs validate）：校验 `package.json` 版本号与 tag 一致 → 下载 dist artifact → 提取 CHANGELOG 对应段落作为 Release notes → `pnpm publish --access public` → `softprops/action-gh-release` 创建 GitHub Release（`generate_release_notes: false`）
 
 **前置配置**：仓库 Settings → Secrets → Actions 添加 `NPM_TOKEN`（npmjs.com 的 Automation Token）。
 
@@ -46,7 +42,8 @@ push 后由 release.yml 完成：wait-for-ci（等待 CI 通过）→ build → 
 
 - `package.json` 与 git tag `vX.Y.Z` 对齐；版本号由提交类型自动推导（feat→minor、fix→patch、breaking→major）
 - 破坏性变更使用 `feat!:`/`BREAKING CHANGE:` 提交标记，并在 release notes 说明
-- 应急回退：`npm dist-tag add fcc-agile-cli@<旧版本> latest`（新装用户立即拿回旧版）；正式修复走 forward-fix 发新版
+- **发布失败自动回退**（发版脚本内置）：Release workflow 失败时，脚本自动 revert `chore(release)` 提交并推送 main（还原 CHANGELOG 与版本号）、删除远端与本地 tag；若 npm 上已存在该版本（publish 成功但后续步骤失败）则拒绝自动回退并提示人工处置。等待超时不回退（workflow 可能仍在运行）
+- 应急回退（版本已发布到 npm 后）：`npm dist-tag add fcc-agile-cli@<旧版本> latest`（新装用户立即拿回旧版）；正式修复走 forward-fix 发新版
 - 不采用删除已发布版本的回退方式
 
 ## 4. 发版 checklist

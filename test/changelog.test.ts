@@ -37,6 +37,19 @@ describe('parseCommits', () => {
       { sha: 'c', subject: 'feat: 真功能', body: '' },
     ])).not.toContain('chore(deps)');
   });
+
+  it('发版提交（chore(release)）不进入 CHANGELOG', () => {
+    expect(
+      parseCommits([
+        { sha: 'a', subject: 'chore(release): v1.0.0', body: '' },
+        { sha: 'b', subject: 'fix: 真修复', body: '' },
+      ]),
+    ).toHaveLength(1);
+    expect(buildChangelogSection('1.1.0', '2026-09-04', [
+      { sha: 'a', subject: 'chore(release): v1.0.0', body: '' },
+      { sha: 'b', subject: 'fix: 真修复', body: '' },
+    ])).not.toContain('chore(release)');
+  });
 });
 
 describe('suggestBump', () => {

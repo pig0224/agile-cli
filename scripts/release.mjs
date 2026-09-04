@@ -121,6 +121,47 @@ async function waitForRelease(repo, tag, timeoutMs = 10 * 60 * 1000) {
   return 'timeout';
 }
 
+/**
+ * 发布失败后的自动回退：revert 发版提交并推送 main，删除远端与本地 tag。
+ * - npm 上已存在该版本时（publish 成功但 workflow 后续步骤失败）拒绝回退，
+ *   否则 npm 与 git 状态脱节（tag 没了版本还在），必须人工处置。
+ * - HEAD 不是本次发版提交时（说明发版后又有新提交）跳过 revert，交人工处理。
+ */
+async function rollbackRelease(pkgName, tag) {
+  const version = tag.slice(1);
+  log(`▶ 自动回退：revert 发版提交 → 推送 main → 删除 tag ${tag}`);
+
+  let published = null;
+  try {
+    published = await trySh('npm', ['view', `${pkgName}@${version}`, 'version']);
+  } catch {
+    // 查询失败（网络等）按"未发布"处理，继续回退；tag 删除是可恢复操作
+  }
+  if (published) {
+    log(`⚠ npm 上已存在 ${pkgName}@${version}（publish 成功但后续步骤失败），不自动回退。`);
+    log(`  请人工处置：保留 tag 修复 workflow 后重跑，或按 docs/release.md「回退」规范操作。`);
+    return;
+  }
+
+  const headSubject = await trySh('git', ['log', '-1', '--pretty=%s']);
+  if (headSubject !== `chore(release): ${tag}`) {
+    log(`⚠ HEAD 不是本次发版提交（当前：${headSubject ?? '未知'}），跳过 revert，请人工回退。`);
+    return;
+  }
+
+  try {
+    await sh('git', ['-c', 'user.name=release', '-c', 'user.email=release@local', 'revert', '--no-edit', 'HEAD']);
+    await sh('git', ['push', 'origin', 'main']);
+    await sh('git', ['push', 'origin', `:refs/tags/${tag}`]);
+    await trySh('git', ['tag', '-d', tag]);
+    log(`✔ 回退完成：CHANGELOG 与版本号已还原并推送 main，tag ${tag}（远端+本地）已删除。`);
+    log(`  修复问题后重新执行 npm run release 即可（CHANGELOG 段落会重新生成）。`);
+  } catch (e) {
+    log(`⚠ 自动回退中途失败：${e.message}`);
+    log(`  已完成的步骤保持不变，请按上方输出人工完成剩余步骤。`);
+  }
+}
+
 async function main() {
   // ---------- 1. 前置检查 ----------
   const pkg = JSON.parse(await fs.readFile(PKG_FILE, 'utf8'));
@@ -231,7 +272,9 @@ async function main() {
   } else if (conclusion === 'timeout') {
     log(`⚠ 等待超时，请自行查看：https://github.com/${repo.owner}/${repo.repo}/actions`);
   } else {
-    throw new Error(`Release workflow 失败（${conclusion}），详情：https://github.com/${repo.owner}/${repo.repo}/actions`);
+    log(`✖ Release workflow 失败（${conclusion}）：https://github.com/${repo.owner}/${repo.repo}/actions`);
+    await rollbackRelease(pkg.name, tag);
+    process.exitCode = 1;
   }
 }
 

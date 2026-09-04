@@ -57,7 +57,7 @@ docs/         设计文档
 - **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，fetch+reset 刷新，失联降级用缓存，本地目录直读跳过缓存）。
 - **git 安全默认**：submodule/clone 本地路径统一附加 `-c protocol.file.allow=always`。
 - CLI 输出统一走 `src/ui.ts`；错误用 `AgileError`/`GitError`，消息中文。
-- **发版 = `npm run release`（人工执行）**：质量门（typecheck/test/build）→ 依据 Conventional Commits 自动生成 CHANGELOG 段落并建议版本号（feat→minor、fix→patch、`!`/BREAKING CHANGE→major）→ bump package.json → commit → tag → push → release.yml 等 CI 通过后发 npm。commit message 必须遵循 Conventional Commits（破坏性用 `!` 或 `BREAKING CHANGE:`）。
+- **发版 = `npm run release`（人工执行）**：质量门（typecheck/test/build）→ 依据 Conventional Commits 自动生成 CHANGELOG 段落并建议版本号（feat→minor、fix→patch、`!`/BREAKING CHANGE→major）→ bump package.json → commit（提交后自检版本写盘）→ tag → push → release.yml（validate → publish 两 job）发 npm；**发布失败脚本自动回退**（revert 发版提交 + 推 main + 删 tag；npm 已有该版本时拒绝回退交人工）。commit message 必须遵循 Conventional Commits（破坏性用 `!` 或 `BREAKING CHANGE:`）。
 
 ## 文档地图
 

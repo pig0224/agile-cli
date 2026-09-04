@@ -20,6 +20,8 @@ export function parseCommits(commits) {
     // Dependabot 的依赖升级提交（chore(deps)/chore(deps-dev): bump …）是维护噪音，
     // 不进入 CHANGELOG（其变更由 lockfile 与 npm 页面体现）
     if (type === 'chore' && (scope ?? '').startsWith('deps')) continue;
+    // 发版提交（chore(release): vX.Y.Z）是流程产物而非用户可见变更，不进入下个版本的 CHANGELOG
+    if (type === 'chore' && scope === 'release') continue;
     const breaking = Boolean(m[4]) || BREAKING_RE.test(body);
     parsed.push({ sha: sha.trim(), type, scope, breaking, subject: subject.trim().replace(/\s+/g, ' ') });
   }
