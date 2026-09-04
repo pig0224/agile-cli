@@ -1,3 +1,29 @@
+## v1.1.0 (2026-09-04)
+
+> bump: minor
+
+### Features
+
+- feat: 钩子迁移至 husky + CHANGELOG 依赖条目过滤 + 文档过时修正 ([`860a0e8`](https://github.com/pig0224/agile-cli/commit/860a0e83ad4c3f22efe643af6ab40655958767a4))
+- feat: CHANGELOG 提交 hash 渲染为可点击链接；内容只保留版本段落 ([`80316d7`](https://github.com/pig0224/agile-cli/commit/80316d7abc54674564ee344f4a735bdb28241fbc))
+- feat: esbuild 单文件打包 + 门禁分层 + CHANGELOG 自动生成 + 社区三件套 ([`fea608a`](https://github.com/pig0224/agile-cli/commit/fea608a3d8332ae5f856b52b99b20603689f2e85))
+
+### Performance
+
+- perf: 优化 changelog 生成脚本 ([`493d65c`](https://github.com/pig0224/agile-cli/commit/493d65c0e1584d7284cc46e6b2c372dddb9b1185))
+
+### Other Changes
+
+- ci: 更新 Release 流程 ([`77edeeb`](https://github.com/pig0224/agile-cli/commit/77edeebfd0871e25a03af649f6e17550904b7280))
+- test: 分组标题断言同步（Bug Fixes → Fixes） ([`38f6fda`](https://github.com/pig0224/agile-cli/commit/38f6fdab8e8fea0e1af604f703fa121ba67736af))
+- chore: 优化 workflow ([`5f566f1`](https://github.com/pig0224/agile-cli/commit/5f566f1cb9fbc55ef26a7adee6ff2c7ef989ed24))
+- chore: 更新 CHANGELOG 内容 ([`84f0f39`](https://github.com/pig0224/agile-cli/commit/84f0f3935ad690a6e716961fe238296cd77a20b6))
+- chore: 移除 push 的 CI 门禁 ([`6b06348`](https://github.com/pig0224/agile-cli/commit/6b06348b38ada8a97c795ce0322c6a5eca0762ee))
+- ci: 发版增加 wait-for-ci 守门——npm publish 必须等待 CI 通过 ([`6f4ab96`](https://github.com/pig0224/agile-cli/commit/6f4ab96d9aa93ff16a3e90aa9a7396fb8f2c194d))
+- ci: Node 基线提升至 24——execa 10 需 Set.prototype.union（Node 22+），CI 精简为单 job ([`7848aab`](https://github.com/pig0224/agile-cli/commit/7848aab1105d855db2cd0cd256634ba0fc25a106))
+- ci: dependabot 升级检查调整为 daily；PR 触发排除 main 目标分支 ([`4e8e9c4`](https://github.com/pig0224/agile-cli/commit/4e8e9c40f1521a44f037932f0045c2b03f873cea))
+- docs: 协作红线——add/push/发版归人工，人工 add 后 AI 可汇总 commit（前置完整性检查） ([`c37d4ec`](https://github.com/pig0224/agile-cli/commit/c37d4ec2b5117138ef98fd0ae282282bc4235f38))
+
 ## v1.0.0 (2026-09-03)
 
 ### Breaking Changes
