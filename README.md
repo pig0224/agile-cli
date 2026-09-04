@@ -24,7 +24,7 @@
 npm install -g fcc-agile-cli
 ```
 
-> Node ≥ 20.5（推荐 22/24 LTS），git ≥ 2.30。插件与模板由各自 git 仓库分发，无需 npm。
+> Node ≥ 24，git ≥ 2.30。插件与模板由各自 git 仓库分发，无需 npm。
 
 ## 5 分钟上手
 

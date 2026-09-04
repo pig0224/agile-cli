@@ -7,7 +7,7 @@
 ```bash
 git clone git@github.com:pig0224/agile-cli.git
 cd agile-cli
-pnpm install        # Node ≥ 20.5，pnpm ≥ 10
+pnpm install        # Node ≥ 24，pnpm ≥ 10
 pnpm build && pnpm test   # 验证环境
 node dist/index.js --help # 本地试用
 ```
@@ -34,7 +34,7 @@ node dist/index.js --help # 本地试用
    > 注：commit 由贡献者执行；协作中的 AI 助手不得执行 git add/commit/push（见仓库 CLAUDE.md 协作红线）。
 
 4. **推送并开 PR**：`git push origin feat/your-feature` → 在 GitHub 开 PR（指向 main）。
-5. **CI 门禁**：PR 会自动跑 typecheck / test / build / CLI 冒烟（Node 20/24），全绿是合并前提。
+5. **CI 门禁**：PR 会自动跑 typecheck / test / build / CLI 冒烟（Node 24），全绿是合并前提。
 6. **Review**：CODEOWNERS 会自动请求维护者 review；approve 后合并（squash）。
 
 ## 发布（维护者）

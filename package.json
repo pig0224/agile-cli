@@ -27,7 +27,7 @@
     "url": "git+https://github.com/pig0224/agile-cli.git"
   },
   "engines": {
-    "node": ">=20.5.0"
+    "node": ">=24"
   },
   "publishConfig": {
     "access": "public"

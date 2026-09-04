@@ -25,7 +25,7 @@
 
 触发：push 到 main + 所有 PR。
 
-矩阵：ubuntu × Node 20/24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/MCP initialize）`。
+矩阵：ubuntu × Node 24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/MCP initialize）`。
 
 ## 2. Release（[.github/workflows/release.yml](../.github/workflows/release.yml)）
 
