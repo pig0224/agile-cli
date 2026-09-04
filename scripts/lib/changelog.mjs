@@ -49,7 +49,7 @@ export function nextVersion(version, commits) {
 const GROUP_ORDER = [
   { key: 'breaking', title: 'Breaking Changes' },
   { key: 'feat', title: 'Features' },
-  { key: 'fix', title: 'Bug Fixes' },
+  { key: 'fix', title: 'Fixes' },
   { key: 'perf', title: 'Performance' },
   { key: 'other', title: 'Other Changes' },
 ];
