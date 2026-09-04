@@ -30,6 +30,9 @@ importers:
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

@@ -1,7 +1,7 @@
 import { execa } from 'execa';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
-import { requireWorkspaceRoot } from '../core/paths.js';
+import { DEFAULT_PLUGIN_MARKETPLACE, findWorkspaceRoot, requireWorkspaceRoot } from '../core/paths.js';
 import { loadPluginFile, loadWorkspace, savePluginFile } from '../core/config.js';
 import * as ui from '../ui.js';
 
@@ -19,11 +19,16 @@ export const pluginCommand = new Command('plugin')
       .option('--marketplace <url>', '插件市场 git 地址（默认 workspace.yaml plugin.marketplace）')
       .option('--marketplace-name <name>', '市场名称（claude plugin install 的 @ 后缀）', MARKETPLACE_NAME)
       .action(async (name: string, opts: { marketplace?: string; marketplaceName: string }) => {
-        const root = requireWorkspaceRoot();
-
-        // 1. 解析市场地址：--marketplace 参数 > workspace.yaml plugin.marketplace
-        const workspace = await loadWorkspace(root);
-        const marketplaceUrl = opts.marketplace ?? workspace.plugin.marketplace;
+        // 1. 解析市场地址：--marketplace 参数 > workspace.yaml plugin.marketplace > 官方默认
+        //    workspace 外也可安装（仅跳过 plugin.yaml 登记）
+        const root = findWorkspaceRoot();
+        let marketplaceUrl = opts.marketplace ?? DEFAULT_PLUGIN_MARKETPLACE;
+        if (root) {
+          const workspace = await loadWorkspace(root);
+          marketplaceUrl = opts.marketplace ?? workspace.plugin.marketplace;
+        } else {
+          console.log(ui.dim('当前不在 agile workspace 内：使用官方默认市场，且不登记 plugin.yaml。'));
+        }
 
         // 2. 注册市场 + 安装插件（本地路径与 git URL 均可，claude CLI 自行处理）
         const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
@@ -50,13 +55,15 @@ export const pluginCommand = new Command('plugin')
           }
         }
 
-        // 3. 记录到 .agile/plugin.yaml（source = 市场 git 地址）
-        const data = (await loadPluginFile(root)) ?? { version: 1, plugins: {} };
-        data.plugins[name] = {
-          source: marketplaceUrl,
-          enabled: true,
-        };
-        await savePluginFile(root, data);
+        // 3. 记录到 .agile/plugin.yaml（source = 市场 git 地址；仅 workspace 内登记）
+        if (root) {
+          const data = (await loadPluginFile(root)) ?? { version: 1, plugins: {} };
+          data.plugins[name] = {
+            source: marketplaceUrl,
+            enabled: true,
+          };
+          await savePluginFile(root, data);
+        }
 
         console.log(ui.ok(`插件 ${name} 已安装（市场：${marketplaceUrl}）`));
         console.log(ui.dim('重启 Claude Code 会话后即可使用 /agile:xxx 系列命令。'));

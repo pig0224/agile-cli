@@ -33,7 +33,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.0",
     "vitest": "^4.1.11"
   }

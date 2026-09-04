@@ -2,12 +2,12 @@
 /**
  * agile-cli 发版脚本（npm run release）
  *
- * 本地只负责：前置检查 → 质量门 → bump 版本 → commit + tag → push。
+ * 本地只负责：质量门 → 收集提交生成 CHANGELOG → bump 版本 → commit + tag → push。
  * 真正的 npm publish 由 GitHub Actions release workflow 执行（tag 触发），
  * 本地不需要也不应该再执行 npm publish。
  *
  * 用法：
- *   npm run release                      # 交互式（默认 patch）
+ *   npm run release                      # 交互式（版本号依据提交类型自动建议）
  *   npm run release -- patch|minor|major # 指定 bump 类型
  *   npm run release -- 0.2.0             # 指定确切版本
  *   npm run release -- patch --dry-run   # 只演练不执行
@@ -18,9 +18,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { execa } from 'execa';
+import { buildChangelogSection, suggestBump } from './lib/changelog.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PKG_FILE = path.join(ROOT, 'package.json');
+const CHANGELOG_FILE = path.join(ROOT, 'CHANGELOG.md');
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -61,11 +63,43 @@ async function ask(question, fallback) {
   return answer || fallback || '';
 }
 
-/** 从 origin URL 解析 owner/repo（支持 ssh 与 https 形式） */
 function parseGithubRepo(remoteUrl) {
   const m = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.#?]+)(?:\.git)?$/i);
   if (!m) return null;
   return { owner: m[1], repo: m[2] };
+}
+
+/** 收集自上个 tag 以来的提交（无 tag 则收集全部提交） */
+async function collectCommitsSinceLastTag() {
+  const lastTag = await trySh('git', ['describe', '--tags', '--abbrev=0']);
+  const range = lastTag ? `${lastTag}..HEAD` : 'HEAD';
+  const raw = await sh('git', ['log', '--pretty=format:%H%x1f%s%x1f%b%x00', range]);
+  const recordSep = String.fromCharCode(0);
+  const unitSep = String.fromCharCode(31);
+  return raw
+    .split(recordSep)
+    .filter((e) => e.trim())
+    .map((entry) => {
+      const [sha, subject, ...body] = entry.split(unitSep);
+      return { sha, subject: subject ?? '', body: body.join(unitSep) ?? '' };
+    });
+}
+
+/** 在 CHANGELOG.md 顶部插入新版本段落（文件不存在则创建） */
+async function writeChangelog(section) {
+  let content = '# Changelog\n\n';
+  try {
+    content = await fs.readFile(CHANGELOG_FILE, 'utf8');
+  } catch {
+    /* 首次创建 */
+  }
+  const header = '# Changelog\n';
+  if (content.startsWith(header)) {
+    content = header + '\n' + section + content.slice(header.length);
+  } else {
+    content = section + '\n' + content;
+  }
+  await fs.writeFile(CHANGELOG_FILE, content, 'utf8');
 }
 
 /** 轮询 GitHub Actions Release workflow 的结论 */
@@ -82,9 +116,7 @@ async function waitForRelease(repo, tag, timeoutMs = 10 * 60 * 1000) {
         const run = (data.workflow_runs ?? []).find(
           (r) => r.name === 'Release' && r.head_branch === tag,
         );
-        if (run && (run.status === 'completed' || run.status === 'failure')) {
-          return run.conclusion;
-        }
+        if (run && run.status === 'completed') return run.conclusion;
       }
     } catch {
       // 网络抖动，继续轮询
@@ -119,14 +151,20 @@ async function main() {
   if (behind > 0) throw new Error(`本地落后 origin/main ${behind} 个提交，先 git pull`);
   if (ahead > 0) throw new Error(`本地领先 origin/main ${ahead} 个提交，先 git push`);
 
-  // ---------- 2. 解析目标版本 ----------
+  // ---------- 2. 收集提交，解析目标版本 ----------
+  const commits = await collectCommitsSinceLastTag();
+  if (commits.length === 0) {
+    throw new Error('上个 tag 以来没有任何提交，无需发版');
+  }
+  const suggested = suggestBump(commits);
+
   let next;
   if (positional && SEMVER_RE.test(positional)) {
     next = positional;
   } else if (positional && BUMP_TYPES.includes(positional)) {
     next = bump(current, positional);
   } else if (!positional) {
-    const type = await ask(`当前 ${current}，bump 类型 ${BUMP_TYPES.join('/')}`, 'patch');
+    const type = await ask(`当前 ${current}，bump 类型 ${BUMP_TYPES.join('/')}（依据提交建议：${suggested}）`, suggested);
     if (!BUMP_TYPES.includes(type)) throw new Error(`非法 bump 类型：${type}`);
     next = bump(current, type);
   } else {
@@ -138,8 +176,8 @@ async function main() {
   if (tagExists) throw new Error(`tag ${tag} 已存在`);
   if (next === current) throw new Error(`新版本与当前版本相同：${next}`);
 
-  // ---------- 3. 质量门（与 CI 相同）----------
-  log(`▶ 质量门：typecheck / test / build`);
+  // ---------- 3. 质量门（与 CI 同款）----------
+  log(`▶ 质量门：typecheck + test + build`);
   if (DRY_RUN) {
     log('（dry-run 跳过）');
   } else {
@@ -148,10 +186,16 @@ async function main() {
     await sh('pnpm', ['build']);
   }
 
-  // ---------- 4. 确认 ----------
+  // ---------- 4. CHANGELOG 段落预览 ----------
+  const section = buildChangelogSection(next, new Date().toISOString().slice(0, 10), commits);
+  log('');
+  log(section);
+  log('');
+
+  // ---------- 5. 确认 ----------
   log(`▶ 发布 ${current} → ${next}（tag ${tag} → ${repo.owner}/${repo.repo}，由 GitHub Actions 执行 npm publish）`);
   if (!YES) {
-    const ok = await ask('确认发布？(y/n)', 'y');
+    const ok = await ask('确认发布？（确认后写入 CHANGELOG、commit、tag、push）', 'y');
     if (!/^y(es)?$/i.test(ok)) throw new Error('已取消');
   }
 
@@ -160,28 +204,25 @@ async function main() {
     return;
   }
 
-  // ---------- 5. 写版本 + commit + tag + push ----------
-  pkg.version = next;
-  await fs.writeFile(PKG_FILE, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-  await sh('git', ['add', 'package.json']);
+  // ---------- 6. CHANGELOG + commit + tag + push ----------
+  await writeChangelog(section);
+  await sh('git', ['add', 'package.json', 'CHANGELOG.md']);
   await sh('git', ['-c', 'user.name=release', '-c', 'user.email=release@local', 'commit', '-m', `chore(release): ${tag}`]);
   await sh('git', ['tag', '-a', tag, '-m', `${tag}`]);
   await sh('git', ['push', 'origin', 'main', tag]);
   log(`✔ 已推送 ${tag}，Release workflow 已触发`);
 
-  // ---------- 6. 跟踪发布结果 ----------
-  if (repo) {
-    log(`▶ 等待 GitHub Actions 发布结果（最长 10 分钟）`);
-    const conclusion = await waitForRelease(repo, tag);
-    console.log('');
-    if (conclusion === 'success') {
-      log(`✔ 发布成功：https://www.npmjs.com/package/${pkg.name}`);
-      log(`  GitHub Release：https://github.com/${repo.owner}/${repo.repo}/releases/tag/${tag}`);
-    } else if (conclusion === 'timeout') {
-      log(`⚠ 等待超时，请自行查看：https://github.com/${repo.owner}/${repo.repo}/actions`);
-    } else {
-      throw new Error(`Release workflow 失败（${conclusion}），详情：https://github.com/${repo.owner}/${repo.repo}/actions`);
-    }
+  // ---------- 7. 跟踪发布结果 ----------
+  log(`▶ 等待 GitHub Actions 发布结果（最长 10 分钟）`);
+  const conclusion = await waitForRelease(repo, tag);
+  console.log('');
+  if (conclusion === 'success') {
+    log(`✔ 发布成功：https://www.npmjs.com/package/${pkg.name}`);
+    log(`  GitHub Release：https://github.com/${repo.owner}/${repo.repo}/releases/tag/${tag}`);
+  } else if (conclusion === 'timeout') {
+    log(`⚠ 等待超时，请自行查看：https://github.com/${repo.owner}/${repo.repo}/actions`);
+  } else {
+    throw new Error(`Release workflow 失败（${conclusion}），详情：https://github.com/${repo.owner}/${repo.repo}/actions`);
   }
 }
 

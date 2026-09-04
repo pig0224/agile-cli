@@ -36,11 +36,12 @@ jobs:
             exit 1
           fi
 
-      - name: Typecheck & test
-        run: pnpm typecheck && pnpm test
-
+      # typecheck/test 由 main 上的 CI 已对该 commit 验证（tag 与 main 同 commit），此处不重复
       - name: Build
         run: pnpm build
+
+      - name: Extract release notes from CHANGELOG
+        run: node scripts/extract-release-notes.mjs "$GITHUB_REF_NAME" RELEASE_NOTES.md
 
       - name: Publish fcc-agile-cli
         run: pnpm publish --access public --no-git-checks
@@ -50,4 +51,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true

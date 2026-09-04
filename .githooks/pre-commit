@@ -1,0 +1,9 @@
+#!/bin/sh
+# pre-commit 门禁：typecheck + test（保证坏代码进不了 commit）
+set -e
+cd "$(git rev-parse --show-toplevel)"
+echo "[pre-commit] typecheck..."
+pnpm typecheck
+echo "[pre-commit] test..."
+pnpm test
+echo "[pre-commit] 通过 ✔"

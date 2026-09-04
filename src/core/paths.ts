@@ -1,6 +1,8 @@
 import fs from 'node:fs';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { AgileError } from './errors.js';
 
 export const AGILE_DIR = '.agile';
@@ -29,6 +31,21 @@ export const DEFAULT_TEMPLATE_REGISTRY = 'https://github.com/pig0224/agile-templ
 /** 模板仓库的用户级缓存根目录（跨 workspace 共享） */
 export function templateCacheRoot(): string {
   return path.join(os.homedir(), '.agile', 'templates');
+}
+
+/**
+ * npm 包根目录（兼容 esbuild 单文件打包与 tsc 多文件两种产物布局）：
+ * - 打包后：dist/index.js → 上两级 = 包根
+ * - tsc 多文件：dist/core/xxx.js → 上三级 = 包根（按最深路径计算）
+ * 以"运行入口文件位置"为准，统一向上查找包含 package.json 的目录。
+ */
+export function packageRoot(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 5; i++) {
+    if (existsSync(path.join(dir, 'package.json'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return path.dirname(fileURLToPath(import.meta.url));
 }
 
 /**

@@ -13,7 +13,7 @@ import {
 } from './schemas.js';
 
 /** 解析 yaml 文本 → zod schema，失败时抛出带文件名的中文错误 */
-export function parseYaml<T>(content: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, file: string): T {
+export function parseYaml<S extends z.ZodType>(content: string, schema: S, file: string): z.output<S> {
   let raw: unknown;
   try {
     raw = YAML.parse(content);
@@ -23,7 +23,7 @@ export function parseYaml<T>(content: string, schema: z.ZodType<T, z.ZodTypeDef,
   if (raw == null) raw = {};
   const result = schema.safeParse(raw);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`).join('\n');
+    const issues = result.error.issues.map((i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
     throw new AgileError(`${file} 格式校验失败：\n${issues}`);
   }
   return result.data;
