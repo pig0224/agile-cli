@@ -23,6 +23,20 @@ describe('parseCommits', () => {
   it('非 Conventional Commits 提交被忽略', () => {
     expect(parseCommits([{ sha: 'a', subject: '随便写的一句话', body: '' }])).toEqual([]);
   });
+
+  it('Dependabot 依赖升级提交（chore(deps)）不进入 CHANGELOG', () => {
+    expect(
+      parseCommits([
+        { sha: 'a', subject: 'chore(deps): bump zod from 3 to 4', body: '' },
+        { sha: 'b', subject: 'chore(deps-dev): bump vitest to 4', body: '' },
+        { sha: 'c', subject: 'feat: 真功能', body: '' },
+      ]),
+    ).toHaveLength(1);
+    expect(buildChangelogSection('1.0.0', '2026-09-04', [
+      { sha: 'a', subject: 'chore(deps): bump zod from 3 to 4', body: '' },
+      { sha: 'c', subject: 'feat: 真功能', body: '' },
+    ])).not.toContain('chore(deps)');
+  });
 });
 
 describe('suggestBump', () => {

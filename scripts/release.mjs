@@ -199,10 +199,24 @@ async function main() {
     return;
   }
 
-  // ---------- 6. CHANGELOG + commit + tag + push ----------
-  await writeChangelog(section);
+  // ---------- 6. CHANGELOG + 版本写入 + commit + tag + push ----------
+  // CHANGELOG 同版本去重：重发/修复场景下段落已存在时跳过写入，避免重复段落
+  const changelogContent = await fs.readFile(CHANGELOG_FILE, 'utf8').catch(() => '');
+  if (changelogContent.includes(`## ${tag} `)) {
+    log(`ℹ CHANGELOG 已包含 ${tag} 段落，跳过写入`);
+  } else {
+    await writeChangelog(section);
+  }
+  // ★ 版本号写盘（单一事实源）：此步骤缺失会导致 tag 内 package.json 与版本不符
+  pkg.version = next;
+  await fs.writeFile(PKG_FILE, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
   await sh('git', ['add', 'package.json', 'CHANGELOG.md']);
   await sh('git', ['-c', 'user.name=release', '-c', 'user.email=release@local', 'commit', '-m', `chore(release): ${tag}`]);
+  // 提交后自检：tag 将指向的 HEAD 中 package.json 必须已是目标版本
+  const committedVersion = JSON.parse(await sh('git', ['show', `HEAD:package.json`])).version;
+  if (committedVersion !== next) {
+    throw new Error(`自检失败：提交内 package.json 版本为 ${committedVersion}，预期 ${next}（中止，未打 tag）`);
+  }
   await sh('git', ['tag', '-a', tag, '-m', `${tag}`]);
   await sh('git', ['push', 'origin', 'main', tag]);
   log(`✔ 已推送 ${tag}，Release workflow 已触发`);

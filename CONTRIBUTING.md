@@ -39,7 +39,7 @@ node dist/index.js --help # 本地试用
 
 ## 发布（维护者）
 
-[release-please](https://github.com/googleapis/release-please) 自动维护 Release PR（CHANGELOG + 版本 bump）——merge 该 PR 即自动打 tag 并发布 npm。详见 [docs/release.md](./docs/release.md)。
+发版由维护者执行 `npm run release`（质量门 → 自动生成 CHANGELOG 段落并建议版本号 → tag → CI 发 npm）。commit message 请遵循 Conventional Commits——它直接决定 CHANGELOG 分组与版本号。详见 [docs/release.md](./docs/release.md)。
 
 ## 报告问题
 

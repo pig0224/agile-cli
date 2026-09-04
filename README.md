@@ -113,7 +113,7 @@ node dist/index.js template check --registry ../agile-templates   # 用兄弟仓
 
 结构：`src/core/`（纯逻辑，可单测）→ `src/commands/`（commander 薄壳）/ `src/mcp/`（MCP Server）→ `test/`（vitest）。详见 [CLAUDE.md](./CLAUDE.md) 与 [docs/](./docs/)。
 
-发版：[release-please](https://github.com/googleapis/release-please) 自动维护 Release PR（CHANGELOG + 版本号），人工 merge 后自动发 npm（详见 [docs/release.md](./docs/release.md)）。commit message 请遵循 Conventional Commits。
+发版：维护者执行 `npm run release`（自动生成 CHANGELOG 段落、建议版本号、打 tag），npm publish 由 GitHub Actions 执行（详见 [docs/release.md](./docs/release.md)）。commit message 请遵循 Conventional Commits。
 
 ## License
 

@@ -1,0 +1,2 @@
+# typecheck + test（坏代码进不了 commit）
+pnpm typecheck

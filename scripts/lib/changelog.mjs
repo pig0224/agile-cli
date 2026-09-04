@@ -16,8 +16,12 @@ export function parseCommits(commits) {
     const m = TYPE_RE.exec(subject.trim());
     if (!m) continue; // 非 Conventional Commits 提交不计入分组
     const type = m[1];
+    const scope = m[3];
+    // Dependabot 的依赖升级提交（chore(deps)/chore(deps-dev): bump …）是维护噪音，
+    // 不进入 CHANGELOG（其变更由 lockfile 与 npm 页面体现）
+    if (type === 'chore' && (scope ?? '').startsWith('deps')) continue;
     const breaking = Boolean(m[4]) || BREAKING_RE.test(body);
-    parsed.push({ sha: sha.trim(), type, scope: m[3], breaking, subject: subject.trim().replace(/\s+/g, ' ') });
+    parsed.push({ sha: sha.trim(), type, scope, breaking, subject: subject.trim().replace(/\s+/g, ' ') });
   }
   return parsed;
 }

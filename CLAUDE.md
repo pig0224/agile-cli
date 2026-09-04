@@ -11,7 +11,7 @@
 1. **绝对不允许执行 `git add`**：哪些变更进入提交，由人工审阅决定。完成修改后，列出变更文件清单与建议的 commit message，等待人工 add。
 2. **人工 add 完成后，可汇总执行 `git commit`**：但 commit 前必须先 `git status` 检查——若仍有本次变更相关的未暂存文件，停下来提醒人工补充 add（不得自行 add）；确认全部已暂存后才执行 commit。
 3. **不允许执行 `git push`**（含 tag 推送、以及内部会执行 add/commit/push 的命令）：推送一律人工处理。
-4. **决不允许发版**：创建/推送 tag、合并 release-please 的 Release PR、触发 Release workflow、`npm publish` 等一切发版动作，只能由人工处理。
+4. **决不允许发版**：创建/推送 tag、执行 `npm run release`、触发 Release workflow、`npm publish` 等一切发版动作，只能由人工处理。
 5. 只读 git 命令（status / log / diff / blame / fetch）不受限制。
 
 ## 核心模型（单仓模式）
@@ -43,7 +43,7 @@ src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander / MCP 
               git / task / template-registry / scaffold / projects
 src/commands/ 命令层（薄壳：参数解析 → 调 core → 输出）
 src/mcp/      MCP Server（复用 core，全部输出 JSON）
-scripts/      （空；发版由 release-please 接管）
+scripts/      release.mjs（发版脚本：质量门→CHANGELOG 生成→tag）+ lib/ + build.mjs + extract-release-notes.mjs
 test/         vitest 单测
 docs/         设计文档
 ```
@@ -57,7 +57,7 @@ docs/         设计文档
 - **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，fetch+reset 刷新，失联降级用缓存，本地目录直读跳过缓存）。
 - **git 安全默认**：submodule/clone 本地路径统一附加 `-c protocol.file.allow=always`。
 - CLI 输出统一走 `src/ui.ts`；错误用 `AgileError`/`GitError`，消息中文。
-- **发版 = release-please**：push main 后自动维护 Release PR（CHANGELOG + 版本号 bump）；人工 merge 该 PR → 自动打 tag → release.yml 发 npm。**发版动作 = 人工 merge Release PR**。commit message 必须遵循 Conventional Commits（feat/fix/docs/chore…，破坏性用 `!` 或 `BREAKING CHANGE:`）。
+- **发版 = `npm run release`（人工执行）**：质量门（typecheck/test/build）→ 依据 Conventional Commits 自动生成 CHANGELOG 段落并建议版本号（feat→minor、fix→patch、`!`/BREAKING CHANGE→major）→ bump package.json → commit → tag → push → release.yml 等 CI 通过后发 npm。commit message 必须遵循 Conventional Commits（破坏性用 `!` 或 `BREAKING CHANGE:`）。
 
 ## 文档地图
 
