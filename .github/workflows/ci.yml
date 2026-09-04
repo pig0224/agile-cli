@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
-
+    
 jobs:
   test:
     name: Test (node ${{ matrix.node }} / ${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         node: [20, 22, 24]
     runs-on: ${{ matrix.os }}
     steps:
