@@ -60,13 +60,14 @@ describe('buildChangelogSection', () => {
     expect(md).toContain('- fix!: 缓存语义反转 (bbb2222)');
     expect(md).toContain('### Features');
     expect(md).toContain('- feat: 支持 .tmpl 模板后缀 (aaa1111)');
-    expect(md).toContain('### Bug Fixes');
+    expect(md).toContain('### Fixes');
     expect(md).toContain('- fix: 修复 --version 脱节 (ccc3333)');
     expect(md).toContain('### Other Changes');
     expect(md).toContain('- docs: 更新使用说明 (ddd4444)');
     // 分组顺序：Breaking → Features → Fixes → Other
     expect(md.indexOf('Breaking')).toBeLessThan(md.indexOf('Features'));
-    expect(md.indexOf('Features')).toBeLessThan(md.indexOf('Bug Fixes'));
+    expect(md.indexOf('Features')).toBeLessThan(md.indexOf('Fixes'));
+    expect(md.indexOf('Fixes')).toBeLessThan(md.indexOf('Other Changes'));
   });
 
   it('提供 commitUrl 时 hash 渲染为可点击链接', () => {
