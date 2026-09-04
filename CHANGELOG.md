@@ -1,3 +1,16 @@
+## v1.2.0 (2026-09-04)
+
+> bump: minor
+
+### Features
+
+- feat(init): init project 支持无模板空项目；plugin enable/disable 缺省 agile ([`10deb43`](https://github.com/pig0224/agile-cli/commit/10deb4383c657c312cb44c493592677ad492107b))
+- feat(release): 发布失败自动回退；CHANGELOG 过滤发版提交 ([`2f5f2ba`](https://github.com/pig0224/agile-cli/commit/2f5f2ba4a20e0664a8d00923feb29b1521e1e44b))
+
+### Other Changes
+
+- ci(release): 关闭 Release Notes 自动生成 ([`604f5f9`](https://github.com/pig0224/agile-cli/commit/604f5f9d9d85690111220c25a938da5de454831b))
+
 ## v1.1.0 (2026-09-04)
 
 > bump: minor
