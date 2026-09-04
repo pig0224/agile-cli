@@ -29,13 +29,14 @@
 
 ## 2. Release（[.github/workflows/release.yml](../.github/workflows/release.yml)）
 
-触发：推送 `v*` tag（由 Release PR merge 自动创建）。
+触发：推送 `v*` tag（由 release 脚本在 main push 时一并创建）。
 
-流程：
-1. 校验 `package.json` 版本号与 tag 一致（不一致直接失败）
-2. `pnpm build`（typecheck/test 由 main 上的 CI 已对该 commit 验证，此处不重复）
-3. `pnpm publish --access public`
-4. `softprops/action-gh-release` 创建 GitHub Release（自动生成 release notes）
+流程（**两阶段串行，发布必须先过 CI**）：
+1. **wait-for-ci**：轮询等待同 commit 的 CI workflow 跑完，结论必须为 success（最长 10 分钟，失败/超时即终止，禁止发布）
+2. 校验 `package.json` 版本号与 tag 一致
+3. `pnpm build`
+4. 从 CHANGELOG.md 提取本版本段落作为 Release notes（`body_path`），并 `pnpm publish --access public`
+5. `softprops/action-gh-release` 创建 GitHub Release
 
 **前置配置**：仓库 Settings → Secrets → Actions 添加 `NPM_TOKEN`（npmjs.com 的 Automation Token）。
 
