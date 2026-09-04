@@ -43,3 +43,13 @@ export async function copyAndSubstitute(
     }
   }
 }
+
+/** 空项目骨架：仅一个 README（不依赖模板注册中心，`init project` 缺省 --template 时使用） */
+export async function scaffoldEmptyProject(dest: string, name: string): Promise<void> {
+  await fs.mkdir(dest, { recursive: true });
+  await fs.writeFile(
+    path.join(dest, 'README.md'),
+    `# ${name}\n\n空项目骨架（\`agile init project\` 未指定 --template）。\n后续可用 \`agile init project\` 配合模板迁移，或直接在此按团队规范补充代码与文档。\n`,
+    'utf8',
+  );
+}

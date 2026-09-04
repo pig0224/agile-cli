@@ -48,6 +48,8 @@ E ∩ A → git submodule update --init --recursive <path>
 2. 脚手架**直接生成到 `projects/<name>`**（workspace 单仓内普通目录，占位符 `{{name}}`/`{{safeName}}` 替换）
 3. `git add`（不自动 commit，提交时机由开发者决定）
 
+缺省 `--template` 时生成空项目骨架（仅 README.md，`scaffoldEmptyProject`），不访问模板注册中心。
+
 项目与 workspace 其余变更一起走同一个 PR——不存在多仓指针滚动问题。
 
 ## 5. 自动同步

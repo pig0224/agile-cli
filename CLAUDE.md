@@ -18,7 +18,7 @@
 
 - workspace = **单一 git 仓库**：biz-tech-docs / biz-product-docs / projects / process-docs 都是普通目录
 - **registry.yaml = 外部仓库登记处**（唯一事实源）：只登记 tech-specs 这类公司级外部 submodule；`sync` 把磁盘收敛到声明状态
-- projects 内项目由 `init project` 从模板生成（普通目录 + git add，**不走 submodule**）
+- projects 内项目由 `init project` 生成（普通目录 + git add，**不走 submodule**）：`--template` 从模板脚手架，缺省为空项目骨架（`scaffoldEmptyProject`，不访问模板注册中心）
 - 跨模块变更一个 PR 天然原子——不存在多仓 PR/分支聚合问题
 
 ## 常用命令

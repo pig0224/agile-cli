@@ -9,6 +9,7 @@ import { parseGitmodules } from '../src/core/gitmodules.js';
 import { matchRepo } from '../src/core/sync.js';
 import { AgileError } from '../src/core/errors.js';
 import { createTaskDocs, TASK_ID_RE } from '../src/core/task.js';
+import { scaffoldEmptyProject } from '../src/core/scaffold.js';
 
 function tmp(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'agile-test-'));
@@ -110,5 +111,18 @@ describe('task', () => {
     await fs.appendFile(path.join(taskDir, 'requirement.md'), 'USER-CONTENT', 'utf8');
     await createTaskDocs(dir, 'STO-042');
     expect(await fs.readFile(path.join(taskDir, 'requirement.md'), 'utf8')).toContain('USER-CONTENT');
+  });
+});
+
+describe('scaffold', () => {
+  it('scaffoldEmptyProject 生成空项目骨架（仅 README，含项目名）', async () => {
+    const dir = await tmp();
+    const dest = path.join(dir, 'projects', 'my-lib');
+    await scaffoldEmptyProject(dest, 'my-lib');
+    const files = await fs.readdir(dest);
+    expect(files).toEqual(['README.md']);
+    const readme = await fs.readFile(path.join(dest, 'README.md'), 'utf8');
+    expect(readme).toContain('# my-lib');
+    expect(readme).toContain('空项目骨架');
   });
 });

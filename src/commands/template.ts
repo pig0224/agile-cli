@@ -44,7 +44,7 @@ export const templateCommand = new Command('template')
           process.exitCode = 1;
         }
         console.log('');
-        console.log(ui.dim('使用：agile init project <name> --template <模板名>'));
+        console.log(ui.dim('使用：agile init project <name> --template <模板名>（--template 缺省创建空项目）'));
       }),
   )
   .addCommand(

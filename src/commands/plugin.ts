@@ -71,8 +71,8 @@ export const pluginCommand = new Command('plugin')
   )
   .addCommand(
     new Command('enable')
-      .description('启用已安装的插件')
-      .argument('<name>', '插件名')
+      .description('启用已安装的插件（缺省为内置插件 agile）')
+      .argument('[name]', '插件名（默认 agile）', BUILTIN)
       .action(async (name: string) => {
         const root = requireWorkspaceRoot();
         const data = await loadPluginFile(root);
@@ -86,8 +86,8 @@ export const pluginCommand = new Command('plugin')
   )
   .addCommand(
     new Command('disable')
-      .description('禁用插件')
-      .argument('<name>', '插件名')
+      .description('禁用插件（缺省为内置插件 agile）')
+      .argument('[name]', '插件名（默认 agile）', BUILTIN)
       .action(async (name: string) => {
         const root = requireWorkspaceRoot();
         const data = await loadPluginFile(root);

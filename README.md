@@ -74,7 +74,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 | 命令 | 说明 |
 |---|---|
 | `agile init workspace` | 初始化工作区骨架与 `.agile` 配置（含插件市场/模板源地址） |
-| `agile init project <name> --template <t>` | 从模板注册中心生成项目到 projects/（普通目录，git add） |
+| `agile init project <name> [--template <t>]` | 创建项目到 projects/（--template 从模板生成，缺省为空项目骨架；普通目录，git add） |
 | `agile template list/update/check` | 模板注册中心：查看 / 刷新缓存 / 一致性校验 |
 | `agile sync [--repo] [--force] [--dry-run] [--quiet]` | 收敛外部 submodule 到 registry 声明状态 |
 | `agile status [--json]` | 外部仓库状态总览（AI 友好 JSON 输出） |

@@ -12,6 +12,7 @@ import {
 import { loadWorkspace, toYaml } from '../core/config.js';
 import { git } from '../core/git.js';
 import { loadTemplates, scaffoldFromTemplate, TEMPLATE_NAME_RE } from '../core/template-registry.js';
+import { scaffoldEmptyProject } from '../core/scaffold.js';
 import * as ui from '../ui.js';
 
 /** 抽屉目录骨架说明（README 放进各抽屉） */
@@ -19,7 +20,7 @@ const DRAWER_READMES: Record<string, string> = {
   'tech-specs': '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\nGit Submodule，由公司规范团队维护，`agile sync` 自动同步。\n',
   'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内目录）。\n',
   'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n',
-  projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> --template <模板名>` 创建（agile template list 查看模板）。\n',
+  projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
   'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req 或 MCP 工具 agile_task_create 生成。\n',
 };
 
@@ -99,16 +100,13 @@ export const initCommand = new Command('init')
   )
   .addCommand(
     new Command('project')
-      .description('初始化项目：从模板注册中心脚手架到 projects/ 下（workspace 单仓内普通目录）')
+      .description('初始化项目到 projects/ 下（workspace 单仓内普通目录）：--template 从模板脚手架，缺省为空项目骨架')
       .argument('<name>', '项目名（将作为 projects/ 下的目录名）')
-      .requiredOption('--template <template>', '模板名（agile template list 查看；模板来自 templates.registry 指向的 git 仓库）')
+      .option('--template <template>', '模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
       .option('--registry <url>', '模板仓库 git URL（默认 workspace.yaml templates.registry）')
       .option('--refresh', '联网刷新模板缓存（默认走本地缓存；agile template update 可强制刷新）')
-      .action(async (name: string, opts: { template: string; registry?: string; refresh?: boolean }) => {
+      .action(async (name: string, opts: { template?: string; registry?: string; refresh?: boolean }) => {
         const root = requireWorkspaceRoot();
-        if (!TEMPLATE_NAME_RE.test(opts.template)) {
-          throw new AgileError(`模板名不合法（格式 ^[a-z][a-z0-9-]*$）：${opts.template}`);
-        }
         const workspace = await loadWorkspace(root);
         const repoPath = `${workspace.paths.projects}/${name}`;
         const abs = path.join(root, repoPath);
@@ -116,28 +114,37 @@ export const initCommand = new Command('init')
           throw new AgileError(`目录已存在：${repoPath}`);
         }
 
-        // 1. 解析模板源（--registry 参数 > workspace.yaml）
-        const templateUrl = opts.registry ?? workspace.templates.registry;
+        if (opts.template === undefined) {
+          // 空项目骨架：不依赖模板注册中心（不联网、不读缓存）
+          await scaffoldEmptyProject(abs, name);
+        } else {
+          if (!TEMPLATE_NAME_RE.test(opts.template)) {
+            throw new AgileError(`模板名不合法（格式 ^[a-z][a-z0-9-]*$）：${opts.template}`);
+          }
 
-        // 2. 加载模板注册中心（默认走本地缓存；--refresh 时联网刷新）
-        const { registry: tplRegistry, repoDir, issues } = await loadTemplates(templateUrl, { refresh: opts.refresh === true });
-        if (issues.length > 0) {
-          throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
-        }
-        const entry = tplRegistry.templates[opts.template];
-        if (!entry) {
-          const available = Object.keys(tplRegistry.templates).join('、');
-          throw new AgileError(`模板不存在：${opts.template}。可用模板：${available || '（无）'}`);
-        }
+          // 1. 解析模板源（--registry 参数 > workspace.yaml）
+          const templateUrl = opts.registry ?? workspace.templates.registry;
 
-        // 3. 脚手架直接生成到 projects/<name>（workspace 单仓内普通目录）
-        await fs.mkdir(path.dirname(abs), { recursive: true });
-        await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+          // 2. 加载模板注册中心（默认走本地缓存；--refresh 时联网刷新）
+          const { registry: tplRegistry, repoDir, issues } = await loadTemplates(templateUrl, { refresh: opts.refresh === true });
+          if (issues.length > 0) {
+            throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+          }
+          const entry = tplRegistry.templates[opts.template];
+          if (!entry) {
+            const available = Object.keys(tplRegistry.templates).join('、');
+            throw new AgileError(`模板不存在：${opts.template}。可用模板：${available || '（无）'}`);
+          }
+
+          // 3. 脚手架直接生成到 projects/<name>（workspace 单仓内普通目录）
+          await fs.mkdir(path.dirname(abs), { recursive: true });
+          await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+        }
 
         // 4. 纳入 workspace 仓库版本管理（只 add，不自动 commit）
         await git(root, ['add', repoPath]);
 
-        console.log(ui.ok(`项目初始化完成：${repoPath}（template=${opts.template}）`));
+        console.log(ui.ok(`项目初始化完成：${repoPath}（${opts.template ? `template=${opts.template}` : '空项目骨架'}）`));
         console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
       }),
   );
