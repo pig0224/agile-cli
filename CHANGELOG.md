@@ -1,23 +1,8 @@
 ## v1.0.0 (2026-09-03)
 
-> bump: major
-
 ### Breaking Changes
 
 - fix!: 模板缓存语义反转——默认走本地缓存，--refresh 才联网刷新 ([`ef5b5da`](https://github.com/pig0224/agile-cli/commit/ef5b5dac1df85331c8b747461fee245d76e2e866))
-
-### Other Changes
-
-- docs: 品牌词大小写统一（FCC-Agile / Agile / FCC），代码与命令语法不变 ([`59c6527`](https://github.com/pig0224/agile-cli/commit/59c65271027c8ec4dbedb5c6718f5dd6e174ceb9))
-- ci: 补充 ISSUE_TEMPLATE / dependabot / dependency-review ([`ed8f369`](https://github.com/pig0224/agile-cli/commit/ed8f3691a43002aed2e50a74c58231631891f69d))
-- docs: README 增加生态文档站链接 ([`45fa9ec`](https://github.com/pig0224/agile-cli/commit/45fa9ec3f18c11ca82589b7a83084246b8293275))
-
-## v0.1.1 (2026-09-03)
-
-> bump: major
-
-### Breaking Changes
-
 - feat!: 单仓模式重构——registry 收窄为外部仓库登记处，移除 gclient 借鉴 ([`a7dcc7a`](https://github.com/pig0224/agile-cli/commit/a7dcc7a9ab6659497caa9536bba6fd8b984e6487))
 - feat!: task 命令从 CLI 移除，仅通过 MCP 工具 agile_task_create 暴露 ([`48c2dce`](https://github.com/pig0224/agile-cli/commit/48c2dce867a75c1d288944d84ad167d5139646a6))
 - feat!: npm 包名改为 fcc-agile-cli（agile-cli 无 scope 名已被 npm 占用） ([`e724bcd`](https://github.com/pig0224/agile-cli/commit/e724bcde63947e96a5b78cfef9f1a27f474bbaaf))
@@ -37,6 +22,9 @@
 
 ### Other Changes
 
+- docs: 品牌词大小写统一（FCC-Agile / Agile / FCC），代码与命令语法不变 ([`59c6527`](https://github.com/pig0224/agile-cli/commit/59c65271027c8ec4dbedb5c6718f5dd6e174ceb9))
+- ci: 补充 ISSUE_TEMPLATE / dependabot / dependency-review ([`ed8f369`](https://github.com/pig0224/agile-cli/commit/ed8f3691a43002aed2e50a74c58231631891f69d))
+- docs: README 增加生态文档站链接 ([`45fa9ec`](https://github.com/pig0224/agile-cli/commit/45fa9ec3f18c11ca82589b7a83084246b8293275))
 - docs: 发版命令 npm run release 文档（CLAUDE.md / docs/release.md） ([`6bbf12a`](https://github.com/pig0224/agile-cli/commit/6bbf12ad30b98de02cb67149ce85e3fd81d8a402))
 - chore: GitHub 仓库地址改为 pig0224 org（默认插件市场/模板源/徽章/repository） ([`9fab639`](https://github.com/pig0224/agile-cli/commit/9fab639f66615f7cacacd8cea4e6ac69df3150a8))
 - chore: 从 monorepo 拆分为独立仓库（subtree split 保留历史） ([`57a01a0`](https://github.com/pig0224/agile-cli/commit/57a01a0b222e29a3de3b1800aa04a99da997990f))
