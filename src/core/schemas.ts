@@ -31,7 +31,6 @@ export const SettingsSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
   created: z.string(),
-  defaultBranch: z.string().default('main'),
   paths: PathsSchema,
   /** 外部仓库：公司级规范（techSpecs）与团队技术知识库（bizTechDocs）。
    *  目录被 .gitignore 忽略不入库，由 agile sync 拉取到本地；未配置则 sync 提示跳过。 */

@@ -27,13 +27,13 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 
 触发：push 到 main + 所有 PR。
 
-矩阵：ubuntu × Node 24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/MCP initialize）`。
+矩阵：ubuntu × Node 24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/config --help）`。
 
 ## 2. Release（[.github/workflows/release.yml](../.github/workflows/release.yml)）
 
 触发：推送 `v*` tag（由发版脚本创建）。两个 job 串行，全部通过才发布：
 
-1. **validate**：install → typecheck → test → build → CLI 冒烟（--version / --help / MCP initialize）→ 上传 dist artifact（不再依赖 CI workflow，自身跑完整质量门）
+1. **validate**：install → typecheck → test → build → CLI 冒烟（--version / --help / config --help）→ 上传 dist artifact（不再依赖 CI workflow，自身跑完整质量门）
 2. **publish**（needs validate）：校验 `package.json` 版本号与 tag 一致 → 下载 dist artifact → 提取 CHANGELOG 对应段落作为 Release notes → `pnpm publish --access public` → `softprops/action-gh-release` 创建 GitHub Release（`generate_release_notes: false`）
 
 **前置配置**：仓库 Settings → Secrets → Actions 添加 `NPM_TOKEN`（npmjs.com 的 Automation Token）。

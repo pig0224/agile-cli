@@ -6,7 +6,6 @@ import { findWorkspaceRoot } from '../src/core/paths.js';
 import { parseYaml, loadSettings, saveSettings } from '../src/core/config.js';
 import { SettingsSchema } from '../src/core/schemas.js';
 import { AgileError } from '../src/core/errors.js';
-import { createTaskDocs, TASK_ID_RE } from '../src/core/task.js';
 import { scaffoldEmptyProject } from '../src/core/scaffold.js';
 
 function tmp(): Promise<string> {
@@ -35,7 +34,6 @@ describe('settings schema', () => {
     expect(r.data.paths.projects).toBe('projects');
     expect(r.data.paths.processDocs).toBe('process-docs');
     expect(r.data.repos).toEqual({});
-    expect(r.data.defaultBranch).toBe('main');
     expect(r.data.plugins.dependencies).toEqual({});
     expect(r.data.templates.registry).toContain('agile-templates');
   });
@@ -84,37 +82,6 @@ describe('config 读写', () => {
 
   it('parseYaml 保留给模板注册中心（registry.yaml）使用', () => {
     expect(() => parseYaml('version: [', SettingsSchema, 'registry.yaml')).toThrow(AgileError);
-  });
-});
-
-describe('task', () => {
-  it('TASK_ID_RE 匹配需求编号', () => {
-    expect(TASK_ID_RE.test('STO-001')).toBe(true);
-    expect(TASK_ID_RE.test('BUG-12')).toBe(false);
-    expect(TASK_ID_RE.test('STO-1')).toBe(false);
-  });
-
-  it('createTaskDocs 生成标准任务目录（7 个文件，implementation 含 be/fe 角色文件，幂等）', async () => {
-    const dir = await tmp();
-    await fs.mkdir(path.join(dir, '.agile'), { recursive: true });
-    await fs.writeFile(path.join(dir, '.agile', 'settings.json'), JSON.stringify(MINIMAL), 'utf8');
-    const taskDir = await createTaskDocs(dir, 'STO-042');
-    const files = (await fs.readdir(taskDir)).sort();
-    expect(files).toEqual([
-      'design.md',
-      'implementation-be.md',
-      'implementation-fe.md',
-      'implementation.md',
-      'release.md',
-      'requirement.md',
-      'review.md',
-    ]);
-    const req = await fs.readFile(path.join(taskDir, 'requirement.md'), 'utf8');
-    expect(req).toContain('STO-042');
-    // 幂等：再次创建不覆盖
-    await fs.appendFile(path.join(taskDir, 'requirement.md'), 'USER-CONTENT', 'utf8');
-    await createTaskDocs(dir, 'STO-042');
-    expect(await fs.readFile(path.join(taskDir, 'requirement.md'), 'utf8')).toContain('USER-CONTENT');
   });
 });
 

@@ -47,4 +47,4 @@ node dist/index.js --help # 本地试用
 
 ## 设计文档
 
-修改核心逻辑前请阅读 [CLAUDE.md](./CLAUDE.md)（分层约定、测试要求）与 [docs/](./docs/)（架构、sync 引擎、MCP 契约）。
+修改核心逻辑前请阅读 [CLAUDE.md](./CLAUDE.md)（分层约定、测试要求）与 [docs/](./docs/)（架构、sync 引擎）。

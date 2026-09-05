@@ -34,16 +34,15 @@ node dist/index.js template list    # 模板源可在 settings.json templates.re
 claude plugin validate ../agile-plugins   # 兄弟插件市场校验
 ```
 
-E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace --tech-specs <本地裸仓库> → sync → 再 sync → config set/get/list → template list → init project --template → worktree create/remove → plugin install/ls → mcp`，参考 docs/architecture.md「验证清单」。
+E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace --tech-specs <本地裸仓库> → sync → 再 sync → config set/get/list → template list → init project --template → worktree create/remove → plugin install/ls`，参考 docs/architecture.md「验证清单」。
 
 ## 结构
 
 ```
-src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander / MCP SDK，不打印）
+src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander，不打印）
               paths / schemas(zod) / config / sync / claude-plugins /
-              git / task / template-registry / scaffold
+              git / template-registry / scaffold
 src/commands/ 命令层（薄壳：参数解析 → 调 core → 输出）
-src/mcp/      MCP Server（复用 core，全部输出 JSON）
 scripts/      release.mjs（发版脚本：质量门→CHANGELOG 生成→tag）+ lib/ + build.mjs + extract-release-notes.mjs
 test/         vitest 单测
 docs/         设计文档
@@ -51,10 +50,10 @@ docs/         设计文档
 
 ## 关键约定
 
-- **core 不写 I/O 入口逻辑、不打印**：命令层与 MCP 层只做「入口 → 调 core → 输出」，两个入口行为必然一致。
+- **core 不写 I/O 入口逻辑、不打印**：命令层只做「入口 → 调 core → 输出」。
 - **改 sync 行为先改/加 `test/sync.test.ts`（本地裸仓 fixture，真实 git 路径）；改模板校验先改/加 `test/template-registry.test.ts`。**
 - **worktree create 前后各自动 sync**（`src/commands/worktree.ts` 的 autoSync：主仓 + worktree 内各一次；失败仅警告不阻塞）。
-- **task 能力无 CLI 命令**：仅 MCP 工具 `agile_task_create` 暴露（core/task.ts 供 MCP 调用）。
+- **无 MCP Server（2.0 起移除）**：AI 一律经 Bash 调用 CLI；任务目录（七文件）由插件命令按 sdd-tdd-method SKILL 附录模板直接创建。
 - **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，fetch+reset 刷新，失联降级用缓存，本地目录直读跳过缓存）。
 - **git 安全默认**：clone 本地路径统一附加 `-c protocol.file.allow=always`。
 - CLI 输出统一走 `src/ui.ts`；错误用 `AgileError`/`GitError`，消息中文。
@@ -66,5 +65,4 @@ docs/         设计文档
 |---|---|
 | docs/architecture.md | 总体架构（单仓模式 + 外部资源不入库）、三仓解耦、配置契约、验证清单 |
 | docs/sync-engine.md | sync 四步拉取、安全设计、版本锁定预留 |
-| docs/mcp.md | MCP 工具契约与注册方式 |
 | docs/release.md | 发版流程（npm）、CI 说明 |

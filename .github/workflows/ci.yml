@@ -40,5 +40,4 @@ jobs:
         run: |
           node dist/index.js --version
           node dist/index.js --help > /dev/null
-          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
-            | node dist/index.js mcp | head -c 200
+          node dist/index.js config --help > /dev/null

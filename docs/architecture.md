@@ -38,11 +38,11 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 
 ```
 ┌─────────────────────────────────────────────┐
-│ CLI（commander）  MCP Server（stdio）        │  ← 入口层：参数解析 + 输出格式化
+│ CLI（commander）                             │  ← 入口层：参数解析 + 输出格式化（AI 经 Bash 直调同一入口）
 ├─────────────────────────────────────────────┤
 │ src/core/（纯逻辑，可单测）                   │  ← 业务层：schema/同步/校验
 │   paths / schemas(zod) / config / sync      │
-│   claude-plugins / git / task               │
+│   claude-plugins / git                      │
 │   template-registry / scaffold              │
 ├─────────────────────────────────────────────┤
 │ git CLI  │  插件市场 git 仓库 │ 模板 git 仓库 │  ← 外部依赖（地址可配置）
@@ -50,8 +50,8 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 ```
 
 铁律：
-- core 不依赖 commander / MCP SDK；命令层与 MCP 层只做「入口 → 调 core → 输出」。
-- CLI、MCP 两个入口共享同一 core 实现，行为必然一致。
+- core 不依赖 commander；命令层只做「入口 → 调 core → 输出」。
+- **无 MCP Server（2.0 起移除）**：AI（Claude Code 等）经 Bash 调用 CLI，与人类共用同一入口，行为天然一致。
 - **core 不输出**：sync 等核心返回结构化结果（steps），打印由命令层决定（如 worktree 的 autoSync 只打印 warn/failed）。
 - 改 sync 行为先改/加 `test/sync.test.ts`；改模板校验先改/加 `test/template-registry.test.ts`。
 
@@ -62,7 +62,6 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
   "version": 1,
   "name": "my-workspace",
   "created": "2026-09-05",
-  "defaultBranch": "main",
   "paths": {
     "techSpecs": "tech-specs",
     "bizTechDocs": "biz-tech-docs",
@@ -111,5 +110,4 @@ agile init project order-service --template go-service   # 落 projects/ 普通�
 agile worktree create feature/STO-001                    # 前后自动 sync（worktree 内独立 clone）
 agile worktree remove feature/STO-001
 agile plugin install agile && agile plugin ls
-node dist/index.js mcp        # JSON-RPC initialize + tools/list；tools/call agile_task_create
 ```

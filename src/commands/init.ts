@@ -21,7 +21,7 @@ const DRAWER_READMES: Record<string, string> = {
   'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（默认 workspace 仓库内目录）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源，同样不入库）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`（骨架目录自动让位）。\n',
   'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
   projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
-  'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req 或 MCP 工具 agile_task_create 生成。\n',
+  'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
 };
 
 async function exists(p: string): Promise<boolean> {
@@ -84,7 +84,6 @@ async function migrateLegacyConfig(agileDir: string, settingsFile: string): Prom
     version: 1,
     name: raw.name ?? path.basename(process.cwd()),
     created: raw.created ?? new Date().toISOString().slice(0, 10),
-    defaultBranch: raw.defaultBranch ?? 'main',
     paths,
     repos: {
       ...(techSpecsUrl ? { techSpecs: { url: techSpecsUrl } } : {}),
@@ -106,7 +105,6 @@ export const initCommand = new Command('init')
     new Command('workspace')
       .description('初始化 workspace（.agile/settings.json + 五个抽屉骨架 + git 仓库；旧版三 yaml 自动迁移）')
       .option('--name <name>', 'workspace 名称', path.basename(process.cwd()))
-      .option('--default-branch <branch>', '默认分支', 'main')
       .option('--marketplace <url>', '插件市场 git 地址', DEFAULT_PLUGIN_MARKETPLACE)
       .option('--template-registry <url>', '项目模板注册中心 git 地址', DEFAULT_TEMPLATE_REGISTRY)
       .option('--tech-specs <url>', '公司级规范外部仓库 git 地址（也可之后 agile config set tech-specs）')
@@ -114,7 +112,6 @@ export const initCommand = new Command('init')
       .action(
         async (opts: {
           name: string;
-          defaultBranch: string;
           marketplace: string;
           templateRegistry: string;
           techSpecs?: string;
@@ -139,7 +136,6 @@ export const initCommand = new Command('init')
                 version: 1,
                 name: opts.name,
                 created: new Date().toISOString().slice(0, 10),
-                defaultBranch: opts.defaultBranch,
                 paths: { ...DEFAULT_PATHS },
                 repos: {
                   ...(opts.techSpecs ? { techSpecs: { url: opts.techSpecs } } : {}),
@@ -169,9 +165,9 @@ export const initCommand = new Command('init')
             await fs.writeFile(prdTemplate, PRD_TEMPLATE, 'utf8');
           }
 
-          // git init（幂等）
+          // git init（幂等；初始分支固定 main——改名用 git branch -m）
           if (!(await exists(path.join(root, '.git')))) {
-            await git(root, ['init', '-b', opts.defaultBranch]);
+            await git(root, ['init', '-b', 'main']);
           }
 
           // 根 .gitignore：幂等确保三行——worktree 开发目录 + 两个外部仓库抽屉（不入库）

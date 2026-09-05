@@ -9,7 +9,6 @@ import { worktreeCommand } from './commands/worktree.js';
 import { templateCommand } from './commands/template.js';
 import { pluginCommand } from './commands/plugin.js';
 import { updateCommand } from './commands/update.js';
-import { mcpCommand } from './commands/mcp.js';
 import pc from 'picocolors';
 
 const program = new Command();
@@ -26,8 +25,7 @@ program
   .addCommand(worktreeCommand)
   .addCommand(templateCommand)
   .addCommand(pluginCommand)
-  .addCommand(updateCommand)
-  .addCommand(mcpCommand);
+  .addCommand(updateCommand);
 
 program
   .command('version')

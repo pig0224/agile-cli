@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/fcc-agile-cli.svg)](https://www.npmjs.com/package/fcc-agile-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-📖 **完整文档**：https://pig0224.github.io/agile-docs/ （命令参考 / MCP / 使用流程 / 插件与模板指南）
+📖 **完整文档**：https://pig0224.github.io/agile-docs/ （命令参考 / 使用流程 / 插件与模板指南）
 
 **One root, five drawers** — 一个 workspace 根 + 五个抽屉的研发工作区 CLI。
 
@@ -78,9 +78,6 @@ my-workspace/                    # 单一 git 仓库（团队）
 | `agile template list/update/clean` | 模板注册中心：查看 / 刷新缓存 / 清理缓存（源 = settings.json templates.registry） |
 | `agile plugin install/uninstall/update/ls` | 插件管理（类 npm：install/uninstall 同时维护 settings.json 依赖声明；update 刷新市场并强制重装；ls 声明 × 实况对照） |
 | `agile update` | CLI 自更新（npm） |
-| `agile mcp` | 启动 stdio MCP Server |
-
-> 任务目录（STO-xxx 标准任务目录）不注册 CLI 命令，仅通过 MCP 工具 `agile_task_create` 暴露（供插件命令 /agile:sync-req 等调用）。
 
 > 私有源：`agile config set plugin-repo <git-url>` / `agile config set template-repo <git-url>` 一键切换内网镜像（落点 settings.json 的 `plugins.marketplace` / `templates.registry`，也可手改；`config unset` 恢复内置官方源）。
 
@@ -88,13 +85,9 @@ my-workspace/                    # 单一 git 仓库（团队）
 
 `agile worktree create` 创建开发环境**前后各自动执行一次 sync**（主仓拉外部资源；worktree 内因外部仓库不入库需独立 clone，失败仅警告不阻塞）。日常场景也可手动 `agile sync`（幂等）。
 
-## MCP / AI 集成
+## AI 集成
 
-`agile mcp` 暴露 4 个工具：`agile_workspace_info`、`agile_sync`（默认 dry-run）、`agile_template_list`、`agile_task_create`。项目 `.mcp.json` 接入：
-
-```json
-{ "mcpServers": { "agile": { "command": "agile", "args": ["mcp"] } } }
-```
+无 MCP Server——AI（Claude Code 等）直接经 Bash 调用 CLI 全部能力（`agile sync` / `agile config list` / `agile worktree create` …），输出即面向人机双读设计。任务目录（STO-xxx 七文件）由 Claude Code 插件命令 `/agile:sync-req`、`/agile:fix-bug` 等按 sdd-tdd-method SKILL 附录模板直接创建。
 
 ## 开发
 
@@ -105,7 +98,7 @@ node dist/index.js --help                       # 本地试用
 node dist/index.js template list                # 模板源见 settings.json templates.registry（可指向 ../agile-templates 验证）
 ```
 
-结构：`src/core/`（纯逻辑，可单测）→ `src/commands/`（commander 薄壳）/ `src/mcp/`（MCP Server）→ `test/`（vitest）。详见 [CLAUDE.md](./CLAUDE.md) 与 [docs/](./docs/)。
+结构：`src/core/`（纯逻辑，可单测）→ `src/commands/`（commander 薄壳）→ `test/`（vitest）。详见 [CLAUDE.md](./CLAUDE.md) 与 [docs/](./docs/)。
 
 发版：维护者执行 `npm run release`（自动生成 CHANGELOG 段落、建议版本号、打 tag），npm publish 由 GitHub Actions 执行（详见 [docs/release.md](./docs/release.md)）。commit message 请遵循 Conventional Commits。
 
@@ -113,7 +106,8 @@ node dist/index.js template list                # 模板源见 settings.json tem
 
 - `agile init workspace` 会自动把旧版 `.agile/workspace.yaml / registry.yaml / plugin.yaml` 并入 `.agile/settings.json`；确认无误后人工 `git rm` 三个旧文件。
 - tech-specs / biz-tech-docs 不再走 submodule：若此前已登记为 submodule，请先人工执行 `git submodule deinit --all`，再 `agile sync`（目录转为独立仓库拉取）。
-- 命令变更：`status/repo/doctor/foreach/hooks` 已移除（`foreach` 可用常规脚本替代，`doctor` 场景由 `sync --dry-run` 覆盖）；`plugin` 收敛为 `install/uninstall/update/ls`；`config` 只管两仓地址；`template` 去掉了 `check/unregister` 与各选项。
+- 命令变更：`status/repo/doctor/foreach/hooks` 已移除（`foreach` 可用常规脚本替代，`doctor` 场景由 `sync --dry-run` 覆盖）；`plugin` 收敛为 `install/uninstall/update/ls`；`config` 四键快捷配置；`template` 去掉了 `check/unregister` 与各选项；`mcp` 已移除（AI 直接经 Bash 调用 CLI）。
+- `init workspace` 的 `--default-branch` 选项与 settings.json 的 `defaultBranch` 字段已移除（初始分支固定 `main`，需要改名用 `git branch -m`）；存量 settings.json 里残留的该字段会被自动忽略。
 
 ## License
 

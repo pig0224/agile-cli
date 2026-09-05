@@ -56,7 +56,6 @@
 
 - `agile sync`：全部步骤逐条输出（✓ done / ! warn / ✖ failed / · skipped）
 - `agile worktree create` 的 autoSync：只打印 warn/failed（不阻塞创建）
-- MCP `agile_sync`：steps 直接 JSON 返回
 
 ## 5. 自动同步
 
