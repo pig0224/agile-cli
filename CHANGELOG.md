@@ -1,3 +1,16 @@
+## v1.3.0 (2026-09-05)
+
+> bump: minor
+
+### Features
+
+- feat(cli): biz-tech-docs 团队知识库支持登记为 submodule（多 workspace 共享） ([`6059f6d`](https://github.com/pig0224/agile-cli/commit/6059f6d0c613c4a8e19e905b0d08ce1f0f7fa71c))
+- feat(cli): worktree create 支持跟踪远程分支，任务目录拆分为 7 文件 ([`59d2e49`](https://github.com/pig0224/agile-cli/commit/59d2e49c1b2f1aeab0104e45280998b117e9999b))
+
+### Fixes
+
+- fix(cli): 修复 sync 对转义 URL 的误判与 worktree 内 submodule 空目录 ([`1e98b1f`](https://github.com/pig0224/agile-cli/commit/1e98b1f2f15c0fe552af5b11bd1feacc22e2f6a0))
+
 ## v1.2.0 (2026-09-04)
 
 > bump: minor
