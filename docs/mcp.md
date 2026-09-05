@@ -6,16 +6,12 @@
 
 | 工具 | 说明 | 关键参数 |
 |---|---|---|
-| `agile_workspace_info` | workspace 配置、五抽屉路径、仓库注册表 | - |
-| `agile_status` | 各仓库 branch/commit/dirty/pin/local 状态 | - |
-| `agile_sync` | 同步 registry 登记的外部仓库（submodule），收敛磁盘状态 | `dryRun`（默认 true！）、`force`、`repo[]` |
-| `agile_doctor` | 健康检查（配置/权限/漂移） | `offline`（跳过远端探测）、`fix`（自动修复） |
-| `agile_template_list` | 列出模板注册中心全部模板 | `refresh`（默认 false 只读缓存） |
+| `agile_workspace_info` | 根目录 + settings.json 全量配置（抽屉路径、外部仓库、插件与模板源） | - |
+| `agile_sync` | 同步外部资源：tech-specs / biz-tech-docs 仓库（clone 或快进，本地优先）+ 模板缓存刷新 + 插件按声明安装 | `dryRun`（默认 true！） |
+| `agile_template_list` | 列出模板注册中心全部模板（源 = settings.json templates.registry，默认走本地缓存） | - |
 | `agile_task_create` | 创建 `process-docs/<编号>/` 标准任务目录（7 个 .md：requirement / design / implementation + implementation-be / implementation-fe / review / release）。**task 能力不注册 CLI 命令，仅通过本工具暴露**（供 Claude Code 插件命令 /agile:sync-req 等编程化调用） | `taskId`（如 STO-001） |
-| `agile_config_list` | workspace.yaml 全量配置 | - |
-| `agile_repo_list` | registry 全部仓库（url/branch/pin） | - |
 
-安全设计：`agile_sync` 默认 `dryRun: true` 只返回计划——AI 必须显式传 `dryRun: false` 才执行写操作，避免模型误触发 git 变更。
+安全设计：`agile_sync` 默认 `dryRun: true` 只返回计划（steps）——AI 必须显式传 `dryRun: false` 才执行写操作，避免模型误触发 git 变更。
 
 ## 2. 注册方式
 
@@ -30,7 +26,7 @@
 ## 3. 错误约定
 
 - workspace 不存在 → 返回 `{ "error": "未找到 workspace…" }`（JSON，不是协议错误）
-- 执行失败 → `report.failed[]` 内含 `{repoPath, error}`，整体不抛协议错误
+- 执行失败 → `steps[]` 内含 `status: "failed"` 的条目与 detail，整体不抛协议错误
 - 配置非法 → 抛 AgileError 消息（中文，带文件名）
 
 ## 4. 新增工具的约定

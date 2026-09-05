@@ -1,67 +1,73 @@
 # Sync Engine 设计
 
-> `agile sync` 收敛 workspace 的外部 submodule（tech-specs 等公司级规范仓库）到 registry.yaml 声明的期望状态。实现见 [src/core/sync.ts](../src/core/sync.ts)。
+> `agile sync` 把四类外部资源拉到本地：外部仓库（tech-specs / biz-tech-docs）、模板缓存、Claude 插件。实现见 [src/core/sync.ts](../src/core/sync.ts)，插件执行层见 [src/core/claude-plugins.ts](../src/core/claude-plugins.ts)。
 
-## 1. 收敛算法
+## 1. 四步拉取
+
+`syncWorkspace(root, settings, { dryRun? })` → `SyncStep[]`（`{ name, status: done|skipped|warn|failed, detail }`），串行执行：
 
 ```
-E = registry 声明的外部仓库集合（期望）
-A = .gitmodules 记录的 submodule 集合
-D = 磁盘实际状态（目录 + .git）
+① repos（逐槽位 techSpecs / bizTechDocs）
+   settings.repos 无 url        → skipped（提示 agile config set <key> <git-url>）
+   目录不存在                   → git clone（file 协议放开）
+   骨架目录（仅 README.md）      → 让位删除后 clone（init workspace 生成的抽屉骨架）
+   目录非空且非骨架             → failed（不静默覆盖用户数据）
+   已是 git 仓库
+   ├── dirty                    → warn 跳过（本地优先，绝不覆盖可写工作区）
+   ├── dryRun                   → skipped [dry-run]
+   └── 干净                     → fetch origin + merge --ff-only @{upstream}
+                                  失败 → failed（分叉/force-push，交人工）
+   ref 版本锁定（预留）          → 追加 warn「锁定暂未实现，按最新拉取」（不阻断）
 
-E − A → git submodule add --name <path> <url> <path>
-        ├── 目标是骨架目录（仅 README.md，init workspace 生成的抽屉）→ 先让位：
-        │     git rm -r --ignore-unmatch <path> && rm -rf <path>，再 add
-        └── 有 pin → add 后 fetch + checkout <pin> + git add <path>
+② templates
+   ensureTemplateRepo(settings.templates.registry, { refresh: true })
+   ├── 成功                     → done（fetch + reset 到远端最新）
+   └── 失联但有缓存             → warn「沿用本地缓存」（stale 降级）
 
-A − E → git submodule deinit --force <path>
-        git rm -f <path> && rm -rf .git/modules/<path>
-
-E ∩ A → git submodule update --init --recursive <path>
-        ├── registry.url ≠ gitmodules.url → 视作 remove + add（重挂载）
-        ├── 有 pin → fetch origin + checkout <pin>（与当前 HEAD 相同则无事可做）
-        └── 无 pin → fetch <branch> + checkout + merge --ff-only origin/<branch>
+③ plugins（按 settings.plugins.dependencies 声明收敛，绝不卸载）
+   无声明                       → skipped
+   已装同市场                   → skipped
+   本机同名来自其他市场         → warn（不自动替换，给出切换命令）
+   未安装                       → marketplace add（幂等兜底）+ claude plugin install
+   ref 版本锁定（预留）         → warn「锁定暂未实现，按市场最新安装」
+   本机已装未声明               → skipped（信息性提示）
 ```
 
-计划（`computeSyncPlan`）与执行（`executeSyncPlan`）分离：`--dry-run`、单测、MCP 的 dryRun 模式都复用计划计算。
+失败语义：任一步 failed → `agile sync` 退出码 1，其余步骤继续执行（部分成功可见）。
 
 ## 2. 安全设计
 
 | 场景 | 行为 |
 |---|---|
-| 外部仓库 dirty | 默认跳过更新并列 warning；`--force` 才强制（绝不自动 stash/reset） |
-| 无 pin 且本地与远端分叉 | `merge --ff-only` 失败即报错，交人工处理 |
-| 有 pin 且当前 HEAD ≠ pin | 更新到 pin（doctor 同时报 pin-drift warning） |
+| 外部仓库 dirty | warn 跳过更新（本地优先，绝不自动 stash/reset/覆盖——这些目录是可写工作区，知识库命令直接落盘） |
+| 本地与远端分叉 | `merge --ff-only` 失败即 failed，交人工处理 |
 | 本地路径 URL | 统一 `-c protocol.file.allow=always`（git 安全默认限制 file 协议） |
-| 目录非空且非骨架 | 拒绝 add，warning 提示人工处理（不静默覆盖用户数据） |
-| 移除仓库 | deinit + rm + 清理 .git/modules |
+| 目录非空且非骨架 | 拒绝 clone，failed 提示人工处理 |
+| 拉取只进不退 | 只 pull 不 reset，不处理远端 force-push |
+| 插件同步 | 绝不卸载：声明删除 ≠ 本机卸载（卸载走 `agile plugin uninstall` / `claude plugin uninstall`） |
 
 ## 3. 骨架目录让位
 
-`init workspace` 会为五个抽屉生成仅含 README.md 的骨架目录。当用户把 `tech-specs` 登记进 registry 后 sync，骨架目录自动让位：`git rm -r --ignore-unmatch` 解除跟踪 → 删除目录 → `submodule add` 重建。判定标准：目录内只有 README.md 一个文件（`isSkeletonDir`）。
+`init workspace` 会为五个抽屉生成仅含 README.md 的骨架目录。当用户 `config set` 登记外部仓库后 sync，骨架目录自动让位：删除目录 → `git clone` 重建。判定标准：目录内只有 README.md 一个文件。
 
-## 4. init project（模板落地，非 submodule）
+## 4. core 不输出（分层约定）
 
-`agile init project <name> --template <模板名>`：
+`syncWorkspace` 只返回结构化 steps，不打印。命令层决定呈现方式：
 
-1. 从模板注册中心（git 仓库，`templates.registry` 配置）解析模板并做一致性校验（详见 agile-templates 仓库的 registry 文档）
-2. 脚手架**直接生成到 `projects/<name>`**（workspace 单仓内普通目录，占位符 `{{name}}`/`{{safeName}}` 替换）
-3. `git add`（不自动 commit，提交时机由开发者决定）
-
-缺省 `--template` 时生成空项目骨架（仅 README.md，`scaffoldEmptyProject`），不访问模板注册中心。
-
-项目与 workspace 其余变更一起走同一个 PR——不存在多仓指针滚动问题。
+- `agile sync`：全部步骤逐条输出（✓ done / ! warn / ✖ failed / · skipped）
+- `agile worktree create` 的 autoSync：只打印 warn/failed（不阻塞创建）
+- MCP `agile_sync`：steps 直接 JSON 返回
 
 ## 5. 自动同步
 
-`agile worktree create <branch>` 前置 `autoSync`：读 registry → computeSyncPlan → 有动作则 executeSyncPlan；任何失败只警告不阻塞（基于当前磁盘状态创建开发环境）。`agile sync --quiet` 供自动化场景静默执行。
+`agile worktree create <branch>` 前后各执行一次 autoSync（主仓 + worktree 目录内各一次，worktree 内因外部仓库不入库需独立 clone）。任何失败只警告不阻塞（基于当前磁盘状态创建开发环境）。
 
-## 6. hooks 匹配（projects 遍历）
+## 6. 版本锁定（预留）
 
-workspace.yaml 的 hooks 是 `{match, run}` 列表，`match` 用 glob 匹配 **`projects/<name>`**（`*` 单段 / `**` 跨段，见 `matchRepo`）。`agile hooks run` 遍历 `listProjects()` 识别的项目执行。项目识别标准：`projects/` 下含构建特征文件（package.json / go.mod / pom.xml / tsconfig.json 等）的目录（[src/core/projects.ts](../src/core/projects.ts)）。
+`repos.*.ref` 与 `plugins.dependencies.*.ref` 字段已进 schema，当前出现即警告「锁定拉取/安装暂未实现，按最新拉取」且不阻断。后续实现后：repo ref = fetch + checkout ref（detached 或分支锁）；plugin ref = 市场克隆 checkout 后安装。
 
 ## 7. 已知边界
 
 - 拉取 branch 时未处理远端 force-push（ff-only 报错即停，符合安全设计）
-- submodule 递归（嵌套 submodule）依赖 git 自身 `--recursive`
-- sync 为串行执行（外部仓库数量少，无需并行）
+- sync 为串行执行（资源数量少，无需并行）
+- 插件安装实况由 Claude Code 全局管理（`~/.claude/plugins/installed_plugins.json`），CLI 只维护声明与执行安装

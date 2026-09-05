@@ -2,17 +2,10 @@ import fs from 'node:fs/promises';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { AgileError } from './errors.js';
-import { AGILE_DIR, PLUGIN_FILE, REGISTRY_FILE, WORKSPACE_FILE } from './paths.js';
-import {
-  PluginFileSchema,
-  RegistrySchema,
-  WorkspaceSchema,
-  type PluginFileConfig,
-  type RegistryConfig,
-  type WorkspaceConfig,
-} from './schemas.js';
+import { AGILE_DIR, SETTINGS_FILE } from './paths.js';
+import { SettingsSchema, type Settings } from './schemas.js';
 
-/** 解析 yaml 文本 → zod schema，失败时抛出带文件名的中文错误 */
+/** 解析 yaml 文本 → zod schema，失败时抛出带文件名的中文错误（模板注册中心 registry.yaml 使用） */
 export function parseYaml<S extends z.ZodType>(content: string, schema: S, file: string): z.output<S> {
   let raw: unknown;
   try {
@@ -29,47 +22,38 @@ export function parseYaml<S extends z.ZodType>(content: string, schema: S, file:
   return result.data;
 }
 
-export function toYaml(data: unknown): string {
-  return YAML.stringify(data, { lineWidth: 120 });
-}
+const settingsFilePath = (root: string) => `${root}/${AGILE_DIR}/${SETTINGS_FILE}`;
 
-async function readIfExists(file: string): Promise<string | null> {
+/** 读取并校验 .agile/settings.json；文件缺失或非法时抛出中文错误 */
+export async function loadSettings(root: string): Promise<Settings> {
+  const file = settingsFilePath(root);
+  let content: string;
   try {
-    return await fs.readFile(file, 'utf8');
+    content = await fs.readFile(file, 'utf8');
   } catch {
-    return null;
+    throw new AgileError(`未找到 ${AGILE_DIR}/${SETTINGS_FILE}。请先运行：agile init workspace`);
   }
-}
-
-export async function loadWorkspace(root: string): Promise<WorkspaceConfig> {
-  const file = `${AGILE_DIR}/${WORKSPACE_FILE}`;
-  const content = await readIfExists(`${root}/${file}`);
-  if (content == null) {
-    throw new AgileError(`未找到 ${file}。请先运行：agile init workspace`);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(content);
+  } catch (e) {
+    throw new AgileError(`${AGILE_DIR}/${SETTINGS_FILE} 不是合法的 JSON：${(e as Error).message}`);
   }
-  return parseYaml(content, WorkspaceSchema, file);
-}
-
-export async function loadRegistry(root: string): Promise<RegistryConfig> {
-  const file = `${AGILE_DIR}/${REGISTRY_FILE}`;
-  const content = await readIfExists(`${root}/${file}`);
-  if (content == null) {
-    throw new AgileError(`未找到 ${file}。请先运行：agile init workspace`);
+  const result = SettingsSchema.safeParse(raw);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
+    throw new AgileError(`${AGILE_DIR}/${SETTINGS_FILE} 格式校验失败：\n${issues}`);
   }
-  return parseYaml(content, RegistrySchema, file);
+  return result.data;
 }
 
-export async function saveRegistry(root: string, registry: RegistryConfig): Promise<void> {
-  await fs.writeFile(`${root}/${AGILE_DIR}/${REGISTRY_FILE}`, toYaml(registry), 'utf8');
+export async function saveSettings(root: string, settings: Settings): Promise<void> {
+  await fs.writeFile(settingsFilePath(root), `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
 }
 
-export async function loadPluginFile(root: string): Promise<PluginFileConfig | null> {
-  const file = `${AGILE_DIR}/${PLUGIN_FILE}`;
-  const content = await readIfExists(`${root}/${file}`);
-  if (content == null) return null;
-  return parseYaml(content, PluginFileSchema, file);
-}
-
-export async function savePluginFile(root: string, data: PluginFileConfig): Promise<void> {
-  await fs.writeFile(`${root}/${AGILE_DIR}/${PLUGIN_FILE}`, toYaml(data), 'utf8');
+export async function settingsFileExists(root: string): Promise<boolean> {
+  return fs
+    .stat(settingsFilePath(root))
+    .then(() => true)
+    .catch(() => false);
 }

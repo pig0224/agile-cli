@@ -2,10 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { findWorkspaceRoot } from '../core/paths.js';
-import { loadRegistry, loadWorkspace } from '../core/config.js';
-import { collectStatus } from '../core/status.js';
-import { computeSyncPlan, executeSyncPlan } from '../core/sync.js';
-import { runDoctor } from '../core/doctor.js';
+import { loadSettings } from '../core/config.js';
+import { syncWorkspace } from '../core/sync.js';
 
 const TASK_DOC_NAMES = [
   'requirement.md',
@@ -23,7 +21,7 @@ function json(result: unknown): { content: { type: 'text'; text: string }[]; isE
 
 function rootOrError(): { root: string | null; error?: string } {
   const root = findWorkspaceRoot();
-  return root ? { root } : { root: null, error: '未找到 workspace（缺少 .agile/workspace.yaml），请先运行 agile init workspace' };
+  return root ? { root } : { root: null, error: '未找到 workspace（缺少 .agile/settings.json），请先运行 agile init workspace' };
 }
 
 export async function startMcpServer(): Promise<void> {
@@ -35,29 +33,13 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     'agile_workspace_info',
     {
-      description: '获取当前 workspace 的基本信息：配置、五个抽屉路径、仓库注册表。',
+      description: '获取当前 workspace 的基本信息：根目录与 .agile/settings.json 全部配置（含五个抽屉路径、外部仓库、插件与模板源）。',
       inputSchema: {},
     },
     async () => {
       const { root, error } = rootOrError();
       if (!root) return json({ error });
-      const workspace = await loadWorkspace(root);
-      const registry = await loadRegistry(root);
-      return json({ root, workspace, repositories: Object.keys(registry.repositories) });
-    },
-  );
-
-  server.registerTool(
-    'agile_status',
-    {
-      description: '查看各仓库的 branch/commit/dirty 状态与 pin 偏差。',
-      inputSchema: {},
-    },
-    async () => {
-      const { root, error } = rootOrError();
-      if (!root) return json({ error });
-      const registry = await loadRegistry(root);
-      return json({ root, repos: await collectStatus(root, registry) });
+      return json({ root, settings: await loadSettings(root) });
     },
   );
 
@@ -65,40 +47,17 @@ export async function startMcpServer(): Promise<void> {
     'agile_sync',
     {
       description:
-        '同步 registry.yaml 登记的外部仓库（如 tech-specs 等 submodule）：把磁盘状态收敛到声明状态（新增/更新/移除）。默认 dryRun=true 只返回计划；dryRun=false 时执行。',
+        '同步外部资源到本地：外部仓库（tech-specs 公司级规范 / biz-tech-docs 团队知识库，clone 或快进拉取，本地改动优先）+ 模板缓存刷新 + Claude 插件按声明安装。默认 dryRun=true 只返回计划；dryRun=false 时执行。',
       inputSchema: {
         dryRun: z.boolean().default(true).describe('true=只返回计划；false=执行'),
-        force: z.boolean().default(false).describe('忽略 dirty 仓库强制更新'),
-        repo: z.array(z.string()).optional().describe('只同步指定仓库路径'),
       },
     },
-    async ({ dryRun, force, repo }) => {
+    async ({ dryRun }) => {
       const { root, error } = rootOrError();
       if (!root) return json({ error });
-      const registry = await loadRegistry(root);
-      const plan = await computeSyncPlan(root, registry, { only: repo?.length ? repo : undefined, force });
-      if (dryRun) return json({ dryRun: true, plan });
-      const report = await executeSyncPlan(root, registry, plan, {
-        only: repo?.length ? repo : undefined,
-        force,
-      });
-      return json({ dryRun: false, plan, report });
-    },
-  );
-
-  server.registerTool(
-    'agile_doctor',
-    {
-      description: '工作空间健康检查：配置错误、远端权限、registry/gitmodules/磁盘漂移。返回问题清单。',
-      inputSchema: {
-        offline: z.boolean().default(false).describe('跳过远端可达性检查'),
-        fix: z.boolean().default(false).describe('自动修复可修复项'),
-      },
-    },
-    async ({ offline, fix }) => {
-      const { root, error } = rootOrError();
-      if (!root) return json({ error });
-      return json(await runDoctor(root, { offline, fix }));
+      const settings = await loadSettings(root);
+      const steps = await syncWorkspace(root, settings, { dryRun });
+      return json({ dryRun, steps });
     },
   );
 
@@ -106,20 +65,18 @@ export async function startMcpServer(): Promise<void> {
     'agile_template_list',
     {
       description:
-        '列出项目模板注册中心的全部可用模板（agile init project --template <模板名> 使用）。模板来自 workspace.yaml templates.registry 指向的 git 仓库。',
-      inputSchema: {
-        refresh: z.boolean().default(false).describe('是否联网刷新模板缓存'),
-      },
+        '列出项目模板注册中心的全部可用模板（agile init project --template <模板名> 使用）。模板源 = settings.json templates.registry 指向的 git 仓库，默认走本地缓存。',
+      inputSchema: {},
     },
-    async ({ refresh }) => {
+    async () => {
       const { root, error } = rootOrError();
       if (!root) return json({ error });
-      const workspace = await loadWorkspace(root);
       const { loadTemplates } = await import('../core/template-registry.js');
       try {
-        const result = await loadTemplates(workspace.templates.registry, { refresh });
+        const settings = await loadSettings(root);
+        const result = await loadTemplates(settings.templates.registry);
         return json({
-          registry: workspace.templates.registry,
+          registry: settings.templates.registry,
           templates: result.registry.templates,
           issues: result.issues,
           stale: result.stale,
@@ -149,33 +106,6 @@ export async function startMcpServer(): Promise<void> {
       } catch (e) {
         return json({ error: (e as Error).message });
       }
-    },
-  );
-
-  server.registerTool(
-    'agile_config_list',
-    {
-      description: '列出 workspace.yaml 全部配置。',
-      inputSchema: {},
-    },
-    async () => {
-      const { root, error } = rootOrError();
-      if (!root) return json({ error });
-      return json(await loadWorkspace(root));
-    },
-  );
-
-  server.registerTool(
-    'agile_repo_list',
-    {
-      description: '列出 registry.yaml 中登记的全部仓库及 URL/分支/pin。',
-      inputSchema: {},
-    },
-    async () => {
-      const { root, error } = rootOrError();
-      if (!root) return json({ error });
-      const registry = await loadRegistry(root);
-      return json(registry.repositories);
     },
   );
 

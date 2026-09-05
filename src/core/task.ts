@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { AgileError } from './errors.js';
-import { loadWorkspace } from './config.js';
+import { loadSettings } from './config.js';
 
 /**
  * 过程产物标准五文档（implementation 含两份角色卫星文件，共 7 个 .md）。
@@ -142,8 +142,8 @@ export async function createTaskDocs(root: string, taskId: string): Promise<stri
   if (!TASK_ID_RE.test(taskId)) {
     throw new AgileError(`需求编号格式应为 形如 STO-001 的 <前缀>-<序号>：${taskId}`);
   }
-  const workspace = await loadWorkspace(root);
-  const dir = path.join(root, workspace.paths.processDocs, taskId);
+  const settings = await loadSettings(root);
+  const dir = path.join(root, settings.paths.processDocs, taskId);
   await fs.mkdir(dir, { recursive: true });
 
   for (const doc of TASK_DOCS) {

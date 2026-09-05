@@ -11,60 +11,51 @@ export const PathsSchema = z
   })
   .default({ ...DEFAULT_PATHS });
 
-export const HookSchema = z.object({
-  /** glob 或精确前缀匹配仓库路径，如 "projects/frontend-web" 或 "projects/*" */
-  match: z.string(),
-  run: z.string(),
+/** 外部仓库登记（settings.json repos 条目）。ref 为版本锁定预留字段：
+ *  设置后 sync 会 pin 到该 commit（锁定拉取暂未实现，出现即警告按最新拉取） */
+export const RepoEntrySchema = z.object({
+  url: z.string().min(1),
+  ref: z.string().optional(),
 });
 
-export const WorkspaceSchema = z.object({
+/** 插件依赖声明（settings.json plugins.dependencies 条目）：仅声明「用哪个插件、来自哪个市场」，
+ *  安装/启用等实况由 Claude Code 全局管理（~/.claude/plugins），本文件不做登记。 */
+export const PluginDependencySchema = z.object({
+  /** 市场名（claude plugin install <name>@<marketplace> 的 @ 后缀）；缺省用内置市场名（fcc） */
+  marketplace: z.string().optional(),
+  /** 版本锁定：pin 到市场仓库 commit SHA；缺省跟随市场最新（锁定安装暂未实现，仅保留声明） */
+  ref: z.string().optional(),
+});
+
+export const SettingsSchema = z.object({
   version: z.literal(1),
   name: z.string().min(1),
   created: z.string(),
   defaultBranch: z.string().default('main'),
   paths: PathsSchema,
-  /** 插件市场（git 仓库，含 .claude-plugin/marketplace.json） */
-  plugin: z
+  /** 外部仓库：公司级规范（techSpecs）与团队技术知识库（bizTechDocs）。
+   *  目录被 .gitignore 忽略不入库，由 agile sync 拉取到本地；未配置则 sync 提示跳过。 */
+  repos: z
     .object({
-      marketplace: z.string().default(DEFAULT_PLUGIN_MARKETPLACE),
+      techSpecs: RepoEntrySchema.optional(),
+      bizTechDocs: RepoEntrySchema.optional(),
     })
-    .default({ marketplace: DEFAULT_PLUGIN_MARKETPLACE }),
-  /** 项目模板注册中心（git 仓库，含 registry.yaml） */
+    .default({}),
+  plugins: z
+    .object({
+      /** 插件市场 git 地址（可指向团队私有 fork；agile config set plugin-repo 换源，unset 恢复默认） */
+      marketplace: z.string().default(DEFAULT_PLUGIN_MARKETPLACE),
+      dependencies: z.record(z.string(), PluginDependencySchema).default({}),
+    })
+    .default({ marketplace: DEFAULT_PLUGIN_MARKETPLACE, dependencies: {} }),
+  /** 项目模板注册中心 git 地址（可指向团队私有 fork；agile config set template-repo 换源，unset 恢复默认） */
   templates: z
     .object({
       registry: z.string().default(DEFAULT_TEMPLATE_REGISTRY),
     })
     .default({ registry: DEFAULT_TEMPLATE_REGISTRY }),
-  hooks: z.array(HookSchema).default([]),
 });
 
-export const RepoEntrySchema = z.object({
-  url: z.string().min(1),
-  branch: z.string().optional(),
-  /** 固定 commit；设置后 sync 会精确 checkout 到该提交 */
-  pin: z.string().optional(),
-});
-
-export const RegistrySchema = z.object({
-  version: z.literal(1),
-  /** key = 相对 workspace 根的路径（即 submodule path），如 "projects/frontend-web" */
-  repositories: z.record(z.string(), RepoEntrySchema),
-});
-
-export const PluginEntrySchema = z.object({
-  /** 来源：npm 包名 / git URL / 本地路径 */
-  source: z.string().min(1),
-  enabled: z.boolean().default(true),
-  version: z.string().optional(),
-});
-
-export const PluginFileSchema = z.object({
-  version: z.literal(1),
-  plugins: z.record(z.string(), PluginEntrySchema),
-});
-
-export type WorkspaceConfig = z.infer<typeof WorkspaceSchema>;
+export type Settings = z.infer<typeof SettingsSchema>;
 export type RepoEntry = z.infer<typeof RepoEntrySchema>;
-export type RegistryConfig = z.infer<typeof RegistrySchema>;
-export type PluginFileConfig = z.infer<typeof PluginFileSchema>;
-export type Hook = z.infer<typeof HookSchema>;
+export type PluginDependency = z.infer<typeof PluginDependencySchema>;

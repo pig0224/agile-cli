@@ -16,10 +16,11 @@
 
 ## 核心模型（单仓模式）
 
-- workspace = **单一 git 仓库**：biz-product-docs / projects / process-docs 都是普通目录；biz-tech-docs 默认普通目录，多 workspace 团队可登记为 submodule 共享（单一事实源）
-- **registry.yaml = 外部仓库登记处**（唯一事实源）：登记外部 submodule——tech-specs 这类公司级规范（必选）、biz-tech-docs 团队知识库（可选）；`sync` 把磁盘收敛到声明状态
-- projects 内项目由 `init project` 生成（普通目录 + git add，**不走 submodule**）：`--template` 从模板脚手架，缺省为空项目骨架（`scaffoldEmptyProject`，不访问模板注册中心）
-- 跨模块变更一个 PR 天然原子——不存在多仓 PR/分支聚合问题
+- workspace = **单一 git 仓库**：biz-product-docs / projects / process-docs 都是普通目录；跨模块变更一个 PR 天然原子
+- **外部资源不入库**：tech-specs（公司级规范）与 biz-tech-docs（团队知识库，可选登记）目录写入 .gitignore，各自是独立 git 仓库；这些目录是**可写工作区**（知识库命令直接落盘）→ sync 一律 pull 不 reset、dirty 警告跳过绝不覆盖
+- **`.agile/settings.json` = 唯一配置**：抽屉路径（paths）、外部仓库（repos：techSpecs/bizTechDocs，`{url, ref?}`，ref 版本锁定预留）、插件市场与依赖声明（plugins）、模板源（templates）；旧版三 yaml 由 init workspace 自动迁移
+- **sync 四步拉取**：repos（clone/ff-only，本地优先）→ templates（缓存刷新，失联降级）→ plugins（按声明安装，绝不卸载）；core 返回 steps 不打印
+- projects 内项目由 `init project` 生成（普通目录 + git add，不走 submodule）：`--template` 从模板脚手架，缺省为空项目骨架（`scaffoldEmptyProject`，不访问模板注册中心）
 
 ## 常用命令
 
@@ -29,18 +30,18 @@ pnpm build          # tsc → dist/
 pnpm test           # vitest（test/）
 pnpm typecheck
 node dist/index.js --help
-node dist/index.js template check --registry ../agile-templates   # 兄弟模板仓库直读模式
-claude plugin validate ../agile-plugins                            # 兄弟插件市场校验
+node dist/index.js template list    # 模板源可在 settings.json templates.registry 指向 ../agile-templates 验证
+claude plugin validate ../agile-plugins   # 兄弟插件市场校验
 ```
 
-E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace → repo add <本地裸仓库> → sync → template list → init project --template → foreach → worktree create → doctor`，参考 docs/architecture.md「验证清单」。
+E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace --tech-specs <本地裸仓库> → sync → 再 sync → config set/get/list → template list → init project --template → worktree create/remove → plugin install/ls → mcp`，参考 docs/architecture.md「验证清单」。
 
 ## 结构
 
 ```
-src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander / MCP SDK）
-              paths / schemas(zod) / config / sync / doctor / status /
-              git / task / template-registry / scaffold / projects
+src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander / MCP SDK，不打印）
+              paths / schemas(zod) / config / sync / claude-plugins /
+              git / task / template-registry / scaffold
 src/commands/ 命令层（薄壳：参数解析 → 调 core → 输出）
 src/mcp/      MCP Server（复用 core，全部输出 JSON）
 scripts/      release.mjs（发版脚本：质量门→CHANGELOG 生成→tag）+ lib/ + build.mjs + extract-release-notes.mjs
@@ -50,12 +51,12 @@ docs/         设计文档
 
 ## 关键约定
 
-- **core 不写 I/O 入口逻辑**：命令层与 MCP 层只做「入口 → 调 core → 输出」，两个入口行为必然一致。
-- **改 sync 行为先改/加 `test/sync.test.ts`；改 projects 遍历先改/加 `test/projects.test.ts`；改模板校验先改/加 `test/template-registry.test.ts`。**
-- **worktree create 自动 sync**（`src/commands/worktree.ts` 的 autoSync）：失败仅警告不阻塞。
+- **core 不写 I/O 入口逻辑、不打印**：命令层与 MCP 层只做「入口 → 调 core → 输出」，两个入口行为必然一致。
+- **改 sync 行为先改/加 `test/sync.test.ts`（本地裸仓 fixture，真实 git 路径）；改模板校验先改/加 `test/template-registry.test.ts`。**
+- **worktree create 前后各自动 sync**（`src/commands/worktree.ts` 的 autoSync：主仓 + worktree 内各一次；失败仅警告不阻塞）。
 - **task 能力无 CLI 命令**：仅 MCP 工具 `agile_task_create` 暴露（core/task.ts 供 MCP 调用）。
 - **模板缓存**：`~/.agile/templates/<url哈希>`（用户级只读副本，fetch+reset 刷新，失联降级用缓存，本地目录直读跳过缓存）。
-- **git 安全默认**：submodule/clone 本地路径统一附加 `-c protocol.file.allow=always`。
+- **git 安全默认**：clone 本地路径统一附加 `-c protocol.file.allow=always`。
 - CLI 输出统一走 `src/ui.ts`；错误用 `AgileError`/`GitError`，消息中文。
 - **发版 = `npm run release`（人工执行）**：质量门（typecheck/test/build）→ 依据 Conventional Commits 自动生成 CHANGELOG 段落并建议版本号（feat→minor、fix→patch、`!`/BREAKING CHANGE→major）→ bump package.json → commit（提交后自检版本写盘）→ tag → push → release.yml（validate → publish 两 job）发 npm；**发布失败脚本自动回退**（revert 发版提交 + 推 main + 删 tag；npm 已有该版本时拒绝回退交人工）。commit message 必须遵循 Conventional Commits（破坏性用 `!` 或 `BREAKING CHANGE:`）。
 
@@ -63,7 +64,7 @@ docs/         设计文档
 
 | 文档 | 内容 |
 |---|---|
-| docs/architecture.md | 总体架构（单仓模式）、三仓解耦、验证清单 |
-| docs/sync-engine.md | sync 收敛算法、安全设计 |
+| docs/architecture.md | 总体架构（单仓模式 + 外部资源不入库）、三仓解耦、配置契约、验证清单 |
+| docs/sync-engine.md | sync 四步拉取、安全设计、版本锁定预留 |
 | docs/mcp.md | MCP 工具契约与注册方式 |
 | docs/release.md | 发版流程（npm）、CI 说明 |

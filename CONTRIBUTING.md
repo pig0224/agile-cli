@@ -43,7 +43,7 @@ node dist/index.js --help # 本地试用
 
 ## 报告问题
 
-使用 [issue 模板](https://github.com/pig0224/agile-cli/issues/new/choose)：bug 请附 `agile doctor --json` 输出与复现步骤。行为准则见 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)。
+使用 [issue 模板](https://github.com/pig0224/agile-cli/issues/new/choose)：bug 请附 `agile sync --dry-run` 输出与复现步骤。行为准则见 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)。
 
 ## 设计文档
 

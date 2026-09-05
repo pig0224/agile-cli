@@ -3,33 +3,43 @@ import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
 import { requireWorkspaceRoot } from '../core/paths.js';
 import { currentBranch, git, gitTry } from '../core/git.js';
-import { computeSyncPlan, executeSyncPlan } from '../core/sync.js';
-import { loadRegistry } from '../core/config.js';
+import { loadSettings } from '../core/config.js';
+import { syncWorkspace } from '../core/sync.js';
 import * as ui from '../ui.js';
 
 /** worktree 存放根目录：workspace 下 .worktrees/（已 gitignore） */
 const WORKTREE_ROOT = '.worktrees';
 
-/** worktree create 前自动同步外部仓库（失败仅警告不阻塞，基于现有状态创建） */
-async function autoSync(root: string): Promise<void> {
+/** 自动同步外部资源（tech-specs/biz-tech-docs/模板/插件，同 agile sync）：失败仅警告不阻塞，基于现有状态继续 */
+async function autoSync(dir: string, label: string): Promise<void> {
   try {
-    const registry = await loadRegistry(root);
-    const plan = await computeSyncPlan(root, registry);
-    if (plan.adds.length + plan.updates.length + plan.removes.length > 0) {
-      await executeSyncPlan(root, registry, plan);
+    const settings = await loadSettings(dir);
+    const steps = await syncWorkspace(dir, settings);
+    for (const s of steps) {
+      if (s.status === 'warn' || s.status === 'failed') console.log(ui.warn(`${label}：${s.name} ${s.detail}`));
     }
   } catch (e) {
-    console.log(ui.warn(`自动同步外部仓库失败（继续创建 worktree）：${(e as Error).message}`));
+    console.log(ui.warn(`${label}失败（继续）：${(e as Error).message}`));
   }
 }
 
 export const worktreeCommand = new Command('worktree')
-  .description('开发环境管理：为 workspace 根仓库创建隔离的 git worktree（含全部代码的完整开发环境）')
+  .description(
+    '开发环境管理：为 workspace 根仓库创建隔离的 git worktree（.worktrees/<分支>，含完整工作区；创建后自动同步外部仓库与插件）',
+  )
   .addCommand(
     new Command('create')
-      .description('创建 workspace worktree，如 agile worktree create feature/STO-001（创建前自动同步外部仓库；本地或远程已有该分支时直接检出/跟踪，多人可各自拉取同一需求分支）')
-      .argument('<branch>', '开发分支名，如 feature/STO-001')
-      .option('--base <ref>', '基准分支/commit，默认当前 HEAD（仅新建分支时生效）')
+      .description(
+        [
+          '创建 workspace worktree，如 agile worktree create feature/STO-001。',
+          '分支来源三分支：① 本地已有该分支 → 直接检出；② 远端 origin 已有 → 跟踪检出（协作场景：负责人推了需求分支，另一端直接拉取）；',
+          '③ 都没有 → 以 --base（默认当前 HEAD）新建分支。',
+          '创建前自动同步主仓外部资源（同 agile sync，失败仅警告不阻塞）；创建后自动在 worktree 内补一次 sync',
+          '（settings.json 随仓库检出，而 tech-specs/biz-tech-docs 不入库，需在 worktree 内独立 clone/拉取）。',
+        ].join('\n        '),
+      )
+      .argument('<branch>', '开发分支名，如 feature/STO-001（目录名中 / 与 \\ 会转写为 __）')
+      .option('--base <ref>', '新建分支时的基准分支/commit，默认当前 HEAD（本地/远程已有该分支时无效）')
       .action(async (branch: string, opts: { base?: string }) => {
         const root = requireWorkspaceRoot();
 
@@ -37,12 +47,12 @@ export const worktreeCommand = new Command('worktree')
         const hasHead = await gitTry(root, ['rev-parse', '--verify', 'HEAD']);
         if (!hasHead.ok) {
           throw new AgileError(
-            'workspace 仓库还没有首次提交，无法创建 worktree。请先完成初始提交（如 registry/抽屉骨架/项目代码）后再试。',
+            'workspace 仓库还没有首次提交，无法创建 worktree。请先完成初始提交（如 settings.json/抽屉骨架/项目代码）后再试。',
           );
         }
 
-        // 1. 自动同步外部仓库（tech-specs 等）
-        await autoSync(root);
+        // 1. 主仓自动同步外部资源（先于创建：基于同步后的状态创建）
+        await autoSync(root, '自动同步');
 
         // 2. 解析分支来源：本地已有 → 直接检出；远程已有 → 跟踪检出（协作场景：负责人推了需求分支，另一端拉取）；
         //    都没有 → 以 base 新建。fetch 失败忽略（离线时用本地已有的远程引用判断）。
@@ -68,14 +78,10 @@ export const worktreeCommand = new Command('worktree')
           throw e;
         }
 
-        // 3. worktree 内 submodule 就位：git worktree 不会自动初始化 submodule，
-        //    不处理则外部仓库（tech-specs/biz-tech-docs 等）在 worktree 里是空目录。
-        //    无 submodule 时为 no-op；失败仅警告不阻塞（开发中可手动补 git submodule update --init）。
-        try {
-          await git(target, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive']);
-        } catch (e) {
-          console.log(ui.warn(`worktree 内 submodule 初始化失败（可稍后手动执行 git submodule update --init）：${(e as Error).message}`));
-        }
+        // 3. worktree 内补一次外部资源同步：git worktree 只检出仓库内文件，
+        //    tech-specs/biz-tech-docs 是 gitignore 的外部仓库，不会跟随检出——在 worktree 目录内独立 clone/拉取。
+        //    失败仅警告不阻塞（开发中可进入 worktree 手动执行 agile sync）。
+        await autoSync(target, 'worktree 内同步');
 
         const wtBranch = await currentBranch(target);
         console.log(ui.ok(`worktree 已创建：${path.relative(root, target)}（分支 ${wtBranch}）`));
@@ -84,7 +90,7 @@ export const worktreeCommand = new Command('worktree')
   )
   .addCommand(
     new Command('list')
-      .description('列出所有 workspace worktree')
+      .description('列出所有 workspace worktree（分支 + 目录）')
       .action(async () => {
         const root = requireWorkspaceRoot();
         const r = await gitTry(root, ['worktree', 'list', '--porcelain']);
@@ -109,9 +115,9 @@ export const worktreeCommand = new Command('worktree')
   )
   .addCommand(
     new Command('remove')
-      .description('移除 worktree（--force 处理含未提交改动的工作区）')
-      .argument('<branch>', '分支名（与 create 时一致）')
-      .option('--force', '强制移除（丢弃未提交改动）')
+      .description('移除 worktree 并删除对应分支（分支未合并时保留，需人工处理）')
+      .argument('<branch>', '分支名（与 create 时一致，如 feature/STO-001）')
+      .option('--force', '强制移除（丢弃 worktree 内未提交改动，谨慎使用）')
       .action(async (branch: string, opts: { force?: boolean }) => {
         const root = requireWorkspaceRoot();
         const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
