@@ -68,6 +68,15 @@ export const worktreeCommand = new Command('worktree')
           throw e;
         }
 
+        // 3. worktree 内 submodule 就位：git worktree 不会自动初始化 submodule，
+        //    不处理则外部仓库（tech-specs/biz-tech-docs 等）在 worktree 里是空目录。
+        //    无 submodule 时为 no-op；失败仅警告不阻塞（开发中可手动补 git submodule update --init）。
+        try {
+          await git(target, ['-c', 'protocol.file.allow=always', 'submodule', 'update', '--init', '--recursive']);
+        } catch (e) {
+          console.log(ui.warn(`worktree 内 submodule 初始化失败（可稍后手动执行 git submodule update --init）：${(e as Error).message}`));
+        }
+
         const wtBranch = await currentBranch(target);
         console.log(ui.ok(`worktree 已创建：${path.relative(root, target)}（分支 ${wtBranch}）`));
         console.log(ui.dim(`开发完成后：agile worktree remove ${branch}`));

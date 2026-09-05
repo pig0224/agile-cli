@@ -65,6 +65,32 @@ describe('computeSyncPlan', () => {
     expect(add?.reason).toContain('URL 变更');
   });
 
+  it('Windows 本地路径 URL：git 写 .gitmodules 转义的 \\\\ 读回应还原，与 registry 原始路径一致（不触发 URL 变更）', async () => {
+    // git config INI 写出时把值中的 `\` 转义为 `\\`（.gitmodules 实际内容为 C:\\Users\\dev\\specs.git）
+    const dir = await makeWorkspace(
+      '[submodule "tech-specs"]\n\tpath = tech-specs\n\turl = C:\\\\Users\\\\dev\\\\specs.git\n',
+    );
+    const reg: RegistryConfig = {
+      version: 1,
+      repositories: { 'tech-specs': { url: 'C:\\Users\\dev\\specs.git', branch: 'main' } },
+    };
+    const plan = await computeSyncPlan(dir, reg);
+    expect(plan.removes).toHaveLength(0);
+    expect(plan.adds).toHaveLength(0);
+  });
+
+  it('gitmodules url 未转义普通路径不受反转义影响', async () => {
+    const dir = await makeWorkspace(
+      '[submodule "tech-specs"]\n\tpath = tech-specs\n\turl = git@x:spec.git\n',
+    );
+    const plan = await computeSyncPlan(dir, {
+      version: 1,
+      repositories: { 'tech-specs': { url: 'git@x:spec.git', branch: 'main' } },
+    });
+    expect(plan.removes).toHaveLength(0);
+    expect(plan.adds).toHaveLength(0);
+  });
+
   it('骨架目录（仅 README.md）→ takeover', async () => {
     const dir = await makeWorkspace(null);
     await fs.mkdir(path.join(dir, 'tech-specs'), { recursive: true });

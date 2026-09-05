@@ -8,6 +8,15 @@ export interface GitmoduleEntry {
 }
 
 /**
+ * git config INI 值反转义：git 写 .gitmodules 时把值中的 `\` 转义为 `\\`
+ * （Windows 本地路径 URL 必现，如 C:\\Users\\...\\repo.git），读回需还原，
+ * 否则与 registry 原始路径比较永远不等，sync 每次都会误判「URL 变更」拆掉重装 submodule。
+ */
+function unescapeIniValue(value: string): string {
+  return value.replace(/\\\\/g, '\\');
+}
+
+/**
  * 解析 .gitmodules（git config INI 格式）。
  * 文件不存在时返回空数组。
  */
@@ -35,9 +44,10 @@ export async function parseGitmodules(root: string): Promise<GitmoduleEntry[]> {
     const kv = /^(\S+?)\s*=\s*(.*)$/.exec(line);
     if (kv && current) {
       const key = kv[1] ?? '';
-      if (key === 'path') current.path = kv[2];
-      else if (key === 'url') current.url = kv[2];
-      else if (key === 'branch') current.branch = kv[2] || undefined;
+      const value = unescapeIniValue(kv[2] ?? '');
+      if (key === 'path') current.path = value;
+      else if (key === 'url') current.url = value;
+      else if (key === 'branch') current.branch = value || undefined;
     }
   }
   if (current?.path && current.url) {
