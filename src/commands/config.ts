@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
-import { DEFAULT_PLUGIN_MARKETPLACE, DEFAULT_TEMPLATE_REGISTRY, requireWorkspaceRoot } from '../core/paths.js';
+import { DEFAULT_PATHS, DEFAULT_PLUGIN_MARKETPLACE, DEFAULT_TEMPLATE_REGISTRY, findWorkspaceRoot, requireWorkspaceRoot } from '../core/paths.js';
 import { loadSettings, saveSettings } from '../core/config.js';
 import type { Settings } from '../core/schemas.js';
 import * as ui from '../ui.js';
@@ -85,8 +85,16 @@ export const configCommand = new Command('config')
       .description('查看配置值，如 agile config get tech-specs / agile config get template-repo')
       .argument('<key>', `配置键：${KEYS_HINT}`)
       .action(async (key: string) => {
-        const settings = await loadSettings(requireWorkspaceRoot());
         const k = parseKey(key);
+        const root = findWorkspaceRoot();
+        if (!root) {
+          // workspace 外：分发源两键返回内置官方默认（类 npm config get registry 的体验），内容仓两键视为未配置
+          const fallback =
+            k === 'plugin-repo' ? DEFAULT_PLUGIN_MARKETPLACE : k === 'template-repo' ? DEFAULT_TEMPLATE_REGISTRY : undefined;
+          console.log(fallback ?? ui.dim(`（未配置；agile config set ${k} <git-url>）`));
+          return;
+        }
+        const settings = await loadSettings(root);
         console.log(ACCESSORS[k].get(settings) ?? ui.dim(`（未配置；agile config set ${k} <git-url>）`));
       }),
   )
@@ -119,9 +127,27 @@ export const configCommand = new Command('config')
   )
   .addCommand(
     new Command('list')
-      .description('显示全部配置（.agile/settings.json 原样输出）')
+      .description('显示全部配置（.agile/settings.json 原样输出；workspace 外显示内置默认配置）')
       .action(async () => {
-        const settings = await loadSettings(requireWorkspaceRoot());
+        const root = findWorkspaceRoot();
+        if (!root) {
+          console.log(ui.dim('当前不在 agile workspace 内：显示内置默认配置。'));
+          console.log(
+            JSON.stringify(
+              {
+                version: 1,
+                paths: DEFAULT_PATHS,
+                repos: {},
+                plugins: { marketplace: DEFAULT_PLUGIN_MARKETPLACE, dependencies: {} },
+                templates: { registry: DEFAULT_TEMPLATE_REGISTRY },
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+        const settings = await loadSettings(root);
         console.log(JSON.stringify(settings, null, 2));
       }),
   );

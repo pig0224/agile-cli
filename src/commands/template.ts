@@ -1,8 +1,17 @@
 import { Command } from 'commander';
-import { requireWorkspaceRoot } from '../core/paths.js';
+import { DEFAULT_TEMPLATE_REGISTRY, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
 import { cleanAllTemplateCaches, loadTemplates } from '../core/template-registry.js';
 import * as ui from '../ui.js';
+
+/** 模板源解析：workspace 内读 settings.json 的 templates.registry；workspace 外用内置官方源
+ *  （模板缓存位于用户级 ~/.agile/templates，跨 workspace 共享——list / update 属查询能力，无需 workspace） */
+async function resolveRegistryUrl(): Promise<string> {
+  const root = findWorkspaceRoot();
+  if (root) return (await loadSettings(root)).templates.registry;
+  console.log(ui.dim('当前不在 agile workspace 内：使用内置官方模板源（换源：agile config set template-repo <git-url>）。'));
+  return DEFAULT_TEMPLATE_REGISTRY;
+}
 
 export const templateCommand = new Command('template')
   .description('项目模板管理（模板注册中心 = git 仓库，换源：agile config set template-repo <git-url>）')
@@ -10,12 +19,11 @@ export const templateCommand = new Command('template')
     new Command('list')
       .description('列出注册中心全部可用模板（默认走本地缓存；agile sync 或 template update 刷新）')
       .action(async () => {
-        const root = requireWorkspaceRoot();
-        const settings = await loadSettings(root);
-        const { registry, issues, stale } = await loadTemplates(settings.templates.registry);
+        const registryUrl = await resolveRegistryUrl();
+        const { registry, issues, stale } = await loadTemplates(registryUrl);
         if (stale) console.log(ui.warn('模板源同步失败，使用本地缓存。'));
 
-        console.log(ui.bold(`模板注册中心：${settings.templates.registry}`));
+        console.log(ui.bold(`模板注册中心：${registryUrl}`));
         console.log('');
         if (Object.keys(registry.templates).length === 0) {
           console.log(ui.dim('（注册中心为空）'));
@@ -37,15 +45,14 @@ export const templateCommand = new Command('template')
     new Command('update')
       .description('刷新模板缓存到注册中心最新（拉取 templates.registry 仓库远端最新）')
       .action(async () => {
-        const root = requireWorkspaceRoot();
-        const settings = await loadSettings(root);
-        const { issues, stale } = await loadTemplates(settings.templates.registry, { refresh: true });
+        const registryUrl = await resolveRegistryUrl();
+        const { issues, stale } = await loadTemplates(registryUrl, { refresh: true });
         if (stale) {
           console.log(ui.fail('模板缓存刷新失败（网络/权限问题）'));
           process.exitCode = 1;
           return;
         }
-        console.log(ui.ok(`模板缓存已更新：${settings.templates.registry}`));
+        console.log(ui.ok(`模板缓存已更新：${registryUrl}`));
         for (const issue of issues) console.log(ui.warn(issue));
       }),
   )

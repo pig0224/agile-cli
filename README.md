@@ -81,6 +81,8 @@ my-workspace/                    # 单一 git 仓库（团队）
 
 > 私有源：`agile config set plugin-repo <git-url>` / `agile config set template-repo <git-url>` 一键切换内网镜像（落点 settings.json 的 `plugins.marketplace` / `templates.registry`，也可手改；`config unset` 恢复内置官方源）。
 
+> workspace 外降级：查询类命令不要求 workspace——`config get`/`config list` 显示内置官方默认，`template list`/`template update` 用内置官方模板源（模板缓存用户级，跨 workspace 共享），`plugin ls` 仅显示本机安装实况。写操作类（`config set/unset`、`sync`、`worktree`、`init project`）必须在工作区内执行，否则报错提示。
+
 ## 自动同步
 
 `agile worktree create` 创建开发环境**前后各自动执行一次 sync**（主仓拉外部资源；worktree 内因外部仓库不入库需独立 clone，失败仅警告不阻塞）。日常场景也可手动 `agile sync`（幂等）。

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { findWorkspaceRoot } from '../src/core/paths.js';
+import { findWorkspaceRoot, requireWorkspaceRoot } from '../src/core/paths.js';
 import { parseYaml, loadSettings, saveSettings } from '../src/core/config.js';
 import { SettingsSchema } from '../src/core/schemas.js';
 import { AgileError } from '../src/core/errors.js';
@@ -23,6 +23,11 @@ describe('paths', () => {
     await fs.mkdir(nested, { recursive: true });
     expect(findWorkspaceRoot(nested)).toBe(dir);
     expect(findWorkspaceRoot(os.tmpdir())).toBeNull();
+  });
+
+  it('requireWorkspaceRoot：workspace 外抛中文报错（写操作类命令保留的必要边界）', async () => {
+    expect(() => requireWorkspaceRoot(os.tmpdir())).toThrow(AgileError);
+    expect(() => requireWorkspaceRoot(os.tmpdir())).toThrow(/agile init workspace/);
   });
 });
 

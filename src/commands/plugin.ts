@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { DEFAULT_PLUGIN_MARKETPLACE, findWorkspaceRoot, requireWorkspaceRoot } from '../core/paths.js';
+import { DEFAULT_PLUGIN_MARKETPLACE, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings, saveSettings } from '../core/config.js';
 import { MARKETPLACE_NAME, planPluginSync, readInstalledClaudePlugins, runClaude } from '../core/claude-plugins.js';
+import type { PluginDependency } from '../core/schemas.js';
 import * as ui from '../ui.js';
 
 /** 内置插件名（agile 插件市场中的 SDD/TDD 主插件） */
@@ -149,17 +150,26 @@ export const pluginCommand = new Command('plugin')
     new Command('ls')
       .description('列出依赖声明与本机安装实况对照（声明来自 settings.json plugins.dependencies；同步补装用 agile sync）')
       .action(async () => {
-        const root = requireWorkspaceRoot();
-        const settings = await loadSettings(root);
-        const dependencies = settings.plugins.dependencies ?? {};
+        const root = findWorkspaceRoot();
+        let dependencies: Record<string, PluginDependency> = {};
+        let marketplace = DEFAULT_PLUGIN_MARKETPLACE;
+        if (root) {
+          const settings = await loadSettings(root);
+          dependencies = settings.plugins.dependencies ?? {};
+          marketplace = settings.plugins.marketplace;
+        } else {
+          console.log(ui.dim('当前不在 agile workspace 内：无依赖声明对照，仅显示本机安装实况。'));
+        }
         const installed = await readInstalledClaudePlugins();
         const plan = planPluginSync(dependencies, installed, MARKETPLACE_NAME);
 
-        console.log(ui.bold(`插件市场：${settings.plugins.marketplace}`));
+        console.log(ui.bold(`插件市场：${marketplace}`));
         console.log('');
         const deps = Object.entries(dependencies);
         if (deps.length === 0 && plan.undeclared.length === 0) {
-          console.log(ui.dim('（无依赖声明；运行 agile plugin install <name> 安装并登记）'));
+          console.log(
+            ui.dim(root ? '（无依赖声明；运行 agile plugin install <name> 安装并登记）' : '（本机未安装 agile 插件；运行 agile plugin install <name> 安装）'),
+          );
           return;
         }
         for (const action of plan.actions) {
