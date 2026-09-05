@@ -19,7 +19,7 @@ import * as ui from '../ui.js';
 const DRAWER_READMES: Record<string, string> = {
   'tech-specs': '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\nGit Submodule，由公司规范团队维护，`agile sync` 自动同步。\n',
   'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内目录）。\n',
-  'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n',
+  'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
   projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
   'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req 或 MCP 工具 agile_task_create 生成。\n',
 };
@@ -27,6 +27,38 @@ const DRAWER_READMES: Record<string, string> = {
 async function exists(p: string): Promise<boolean> {
   return fs.stat(p).then(() => true).catch(() => false);
 }
+
+/** 产品需求文档（PRD）写作模板——产品在仓库（GitHub Web / VS Code）按此结构写，最低要求：背景/目标/AC ≥ 1 */
+const PRD_TEMPLATE = `# <编号> 需求名称
+
+> 使用方式：复制本文件为 \`requirements/<编号>/PRD.md\` 并填充；配套产物（AC.md / feature-tree.md / menu-tree.md）可选，拆出后与 PRD.md 同目录。
+> 最低结构要求：背景、目标、验收标准（AC ≥ 1 条）。
+
+## 背景
+
+（需求来源、业务背景、现状问题）
+
+## 目标
+
+（本需求要达成的业务目标，可量化）
+
+## 验收标准（AC）
+
+- [ ] AC1:
+- [ ] AC2:
+
+## 功能树
+
+（可选：功能拆解，/agile:prd 可生成 feature-tree.md）
+
+## 菜单树
+
+（可选：页面/菜单结构，前端页面范围依据）
+
+## 非目标
+
+（可选：本需求明确不做什么）
+`;
 
 export const initCommand = new Command('init')
   .description('初始化：workspace 工作空间 或 project 项目')
@@ -79,6 +111,13 @@ export const initCommand = new Command('init')
           }
         }
 
+        // 产品 PRD 写作模板（幂等）
+        const prdTemplate = path.join(root, 'biz-product-docs', 'templates', 'PRD模板.md');
+        if (!(await exists(prdTemplate))) {
+          await fs.mkdir(path.dirname(prdTemplate), { recursive: true });
+          await fs.writeFile(prdTemplate, PRD_TEMPLATE, 'utf8');
+        }
+
         // git init（幂等）
         if (!(await exists(path.join(root, '.git')))) {
           await git(root, ['init', '-b', opts.defaultBranch]);
@@ -88,6 +127,12 @@ export const initCommand = new Command('init')
         const gitignore = path.join(root, '.gitignore');
         if (!(await exists(gitignore))) {
           await fs.writeFile(gitignore, '.worktrees/\n', 'utf8');
+        }
+
+        // 根 .gitattributes：统一换行符为 LF（防跨平台合并假冲突），Windows 脚本保持 CRLF
+        const gitattributes = path.join(root, '.gitattributes');
+        if (!(await exists(gitattributes))) {
+          await fs.writeFile(gitattributes, '* text=auto eol=lf\n*.bat text eol=crlf\n*.cmd text eol=crlf\n', 'utf8');
         }
 
         console.log(ui.ok(`workspace 初始化完成：${root}`));

@@ -27,9 +27,9 @@ export const worktreeCommand = new Command('worktree')
   .description('开发环境管理：为 workspace 根仓库创建隔离的 git worktree（含全部代码的完整开发环境）')
   .addCommand(
     new Command('create')
-      .description('创建 workspace worktree，如 agile worktree create feature/STO-001（创建前自动同步外部仓库）')
+      .description('创建 workspace worktree，如 agile worktree create feature/STO-001（创建前自动同步外部仓库；本地或远程已有该分支时直接检出/跟踪，多人可各自拉取同一需求分支）')
       .argument('<branch>', '开发分支名，如 feature/STO-001')
-      .option('--base <ref>', '基准分支/commit，默认当前 HEAD')
+      .option('--base <ref>', '基准分支/commit，默认当前 HEAD（仅新建分支时生效）')
       .action(async (branch: string, opts: { base?: string }) => {
         const root = requireWorkspaceRoot();
 
@@ -44,10 +44,24 @@ export const worktreeCommand = new Command('worktree')
         // 1. 自动同步外部仓库（tech-specs 等）
         await autoSync(root);
 
-        // 2. 创建根仓库 worktree：.worktrees/<branch 路径转下划线>
+        // 2. 解析分支来源：本地已有 → 直接检出；远程已有 → 跟踪检出（协作场景：负责人推了需求分支，另一端拉取）；
+        //    都没有 → 以 base 新建。fetch 失败忽略（离线时用本地已有的远程引用判断）。
         const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
+        await gitTry(root, ['fetch', 'origin', branch, '--quiet']);
+        const hasLocal = (await gitTry(root, ['rev-parse', '--verify', `refs/heads/${branch}`])).ok;
+        const hasRemote = (await gitTry(root, ['rev-parse', '--verify', `refs/remotes/origin/${branch}`])).ok;
+        let addArgs: string[];
+        if (hasLocal) {
+          addArgs = ['worktree', 'add', target, branch];
+          console.log(ui.dim(`本地分支已存在，直接检出：${branch}`));
+        } else if (hasRemote) {
+          addArgs = ['worktree', 'add', '--track', '-b', branch, target, `origin/${branch}`];
+          console.log(ui.dim(`远程分支已存在，创建跟踪分支：${branch}（origin/${branch}）`));
+        } else {
+          addArgs = ['worktree', 'add', '-b', branch, target, opts.base ?? 'HEAD'];
+        }
         try {
-          await git(root, ['worktree', 'add', '-b', branch, target, opts.base ?? 'HEAD']);
+          await git(root, addArgs);
         } catch (e) {
           // 失败时清理半成品目录（git 可能已创建目录）
           await import('node:fs/promises').then((fs) => fs.rm(target, { recursive: true, force: true }));

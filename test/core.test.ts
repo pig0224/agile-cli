@@ -94,7 +94,7 @@ describe('task', () => {
     expect(TASK_ID_RE.test('STO-1')).toBe(false);
   });
 
-  it('createTaskDocs 生成五文档（幂等）', async () => {
+  it('createTaskDocs 生成标准任务目录（7 个文件，implementation 含 be/fe 角色文件，幂等）', async () => {
     const dir = await tmp();
     await fs.mkdir(path.join(dir, '.agile'), { recursive: true });
     await fs.writeFile(
@@ -104,7 +104,15 @@ describe('task', () => {
     );
     const taskDir = await createTaskDocs(dir, 'STO-042');
     const files = (await fs.readdir(taskDir)).sort();
-    expect(files).toEqual(['design.md', 'implementation.md', 'release.md', 'requirement.md', 'review.md']);
+    expect(files).toEqual([
+      'design.md',
+      'implementation-be.md',
+      'implementation-fe.md',
+      'implementation.md',
+      'release.md',
+      'requirement.md',
+      'review.md',
+    ]);
     const req = await fs.readFile(path.join(taskDir, 'requirement.md'), 'utf8');
     expect(req).toContain('STO-042');
     // 幂等：再次创建不覆盖

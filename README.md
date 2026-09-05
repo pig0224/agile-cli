@@ -66,7 +66,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 ├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（普通目录）
 ├── biz-product-docs/            # 抽屉三：产品设计知识库（普通目录）
 ├── projects/                    # 抽屉四：项目代码（普通目录，模板脚手架直接落此）
-└── process-docs/                # 抽屉五：过程产物（STO-xxx 五文档，普通目录）
+└── process-docs/                # 抽屉五：过程产物（STO-xxx 标准任务目录，普通目录）
 ```
 
 ## 命令一览
@@ -88,7 +88,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 | `agile update --cli` | CLI 自更新（npm） |
 | `agile mcp` | 启动 stdio MCP Server |
 
-> 任务目录（STO-xxx 五文档）不注册 CLI 命令，仅通过 MCP 工具 `agile_task_create` 暴露（供插件命令 /agile:sync-req 等调用）。
+> 任务目录（STO-xxx 标准任务目录）不注册 CLI 命令，仅通过 MCP 工具 `agile_task_create` 暴露（供插件命令 /agile:sync-req 等调用）。
 
 ## 自动同步
 

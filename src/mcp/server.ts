@@ -7,7 +7,15 @@ import { collectStatus } from '../core/status.js';
 import { computeSyncPlan, executeSyncPlan } from '../core/sync.js';
 import { runDoctor } from '../core/doctor.js';
 
-const TASK_DOC_NAMES = ['requirement.md', 'design.md', 'implementation.md', 'review.md', 'release.md'];
+const TASK_DOC_NAMES = [
+  'requirement.md',
+  'design.md',
+  'implementation.md',
+  'implementation-be.md',
+  'implementation-fe.md',
+  'review.md',
+  'release.md',
+];
 
 function json(result: unknown): { content: { type: 'text'; text: string }[]; isError?: boolean } {
   return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -125,7 +133,8 @@ export async function startMcpServer(): Promise<void> {
   server.registerTool(
     'agile_task_create',
     {
-      description: '在 process-docs 下创建需求编号目录（STO-xxx）及标准五文档：requirement/design/implementation/review/release.md。',
+      description:
+        '在 process-docs 下创建需求编号目录（STO-xxx）及标准五文档（implementation 含 -be/-fe 角色文件，共 7 个）：requirement/design/implementation/implementation-be/implementation-fe/review/release.md。',
       inputSchema: {
         taskId: z.string().describe('需求编号，如 STO-001'),
       },

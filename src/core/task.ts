@@ -3,7 +3,12 @@ import path from 'node:path';
 import { AgileError } from './errors.js';
 import { loadWorkspace } from './config.js';
 
-/** 过程产物标准五文档（本模块不注册 CLI 命令，仅由 MCP 工具 agile_task_create 暴露） */
+/**
+ * 过程产物标准五文档（implementation 含两份角色卫星文件，共 7 个 .md）。
+ * 分工红线：implementation-be.md 仅后端写、implementation-fe.md 仅前端写、主文件冻结后只读——
+ * 前后端并行开发（同一需求分支）时文件级隔离，git 合并零冲突。
+ * 本模块不注册 CLI 命令，仅由 MCP 工具 agile_task_create 暴露。
+ */
 export const TASK_DOCS: Array<{ file: string; template: string }> = [
   {
     file: 'requirement.md',
@@ -48,16 +53,52 @@ export const TASK_DOCS: Array<{ file: string; template: string }> = [
   },
   {
     file: 'implementation.md',
-    template: `# {{id}} 实施记录
+    template: `# {{id}} 实施记录（任务分配）
 
-> 由 agile:backend / agile:frontend 填充（TDD：Red → Green → Refactor）。
+> 主文件：任务分配表在 design.md 冻结时填写，之后**只读**；执行状态在各角色文件的任务清单中体现。
+> 分工红线：后端只写 [implementation-be.md](implementation-be.md)，前端只写 [implementation-fe.md](implementation-fe.md)。
+
+## 任务分配
+
+| # | 任务 | 归属 | 明细 |
+|---|---|---|---|
+| 1 | | be / fe | [BE-1](implementation-be.md) / [FE-1](implementation-fe.md) |
+
+## 联调约定
+
+（接口对齐方式、环境、时间；双方知会）
+`,
+  },
+  {
+    file: 'implementation-be.md',
+    template: `# {{id}} 后端实施记录
+
+> 本文件由**后端专属维护**（agile:backend / TDD：Red → Green → Refactor）；前端记录见 [implementation-fe.md](implementation-fe.md)。
 
 ## 任务清单
 
-- [ ] 任务1
-- [ ] 任务2
+- [ ] BE-1:
 
 ## TDD 循环记录
+
+| # | 测试（先写） | 实现后状态 |
+|---|---|---|
+| 1 | | |
+
+## 变更清单
+`,
+  },
+  {
+    file: 'implementation-fe.md',
+    template: `# {{id}} 前端实施记录
+
+> 本文件由**前端专属维护**（agile:frontend / 分层开发：接口层 → 组件层 → 页面层）；后端记录见 [implementation-be.md](implementation-be.md)。
+
+## 任务清单
+
+- [ ] FE-1:
+
+## 测试记录
 
 | # | 测试（先写） | 实现后状态 |
 |---|---|---|
@@ -96,7 +137,7 @@ export const TASK_DOCS: Array<{ file: string; template: string }> = [
 
 export const TASK_ID_RE = /^[A-Za-z]+-\d{3,}$/;
 
-/** 在 process-docs 下生成需求编号目录与标准五文档（幂等） */
+/** 在 process-docs 下生成需求编号目录与标准五文档（implementation 含 be/fe 角色文件，共 7 个；幂等） */
 export async function createTaskDocs(root: string, taskId: string): Promise<string> {
   if (!TASK_ID_RE.test(taskId)) {
     throw new AgileError(`需求编号格式应为 形如 STO-001 的 <前缀>-<序号>：${taskId}`);

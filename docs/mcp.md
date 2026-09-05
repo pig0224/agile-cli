@@ -11,7 +11,7 @@
 | `agile_sync` | 同步 registry 登记的外部仓库（submodule），收敛磁盘状态 | `dryRun`（默认 true！）、`force`、`repo[]` |
 | `agile_doctor` | 健康检查（配置/权限/漂移） | `offline`（跳过远端探测）、`fix`（自动修复） |
 | `agile_template_list` | 列出模板注册中心全部模板 | `refresh`（默认 false 只读缓存） |
-| `agile_task_create` | 创建 `process-docs/<编号>/` 五文档目录。**task 能力不注册 CLI 命令，仅通过本工具暴露**（供 Claude Code 插件命令 /agile:sync-req 等编程化调用） | `taskId`（如 STO-001） |
+| `agile_task_create` | 创建 `process-docs/<编号>/` 标准任务目录（7 个 .md：requirement / design / implementation + implementation-be / implementation-fe / review / release）。**task 能力不注册 CLI 命令，仅通过本工具暴露**（供 Claude Code 插件命令 /agile:sync-req 等编程化调用） | `taskId`（如 STO-001） |
 | `agile_config_list` | workspace.yaml 全量配置 | - |
 | `agile_repo_list` | registry 全部仓库（url/branch/pin） | - |
 

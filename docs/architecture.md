@@ -19,7 +19,7 @@ workspace/                  # 单一 git 仓库（团队）
 ├── biz-tech-docs/          # 抽屉二（普通目录）
 ├── biz-product-docs/       # 抽屉三（普通目录）
 ├── projects/               # 抽屉四（普通目录，模板脚手架落此）
-└── process-docs/           # 抽屉五（普通目录，STO-xxx 五文档）
+└── process-docs/           # 抽屉五（普通目录，STO-xxx 标准任务目录：五文档 + be/fe 角色文件）
 ```
 
 ## 2. 三仓解耦（CLI 与扩展源）
