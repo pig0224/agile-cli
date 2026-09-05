@@ -70,6 +70,40 @@ export const pluginCommand = new Command('plugin')
       }),
   )
   .addCommand(
+    new Command('uninstall')
+      .description('卸载插件并移除 workspace 登记（缺省为内置插件 agile；重启 Claude Code 会话生效）')
+      .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
+      .option('--marketplace-name <name>', '市场名称（claude plugin uninstall 的 @ 后缀）', MARKETPLACE_NAME)
+      .action(async (name: string, opts: { marketplaceName: string }) => {
+        const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
+        const pluginId = `${name}@${opts.marketplaceName}`;
+        const r = await execa(claude, ['plugin', 'uninstall', pluginId], {
+          reject: false,
+          timeout: 120_000,
+          windowsHide: true,
+        });
+        if (r.exitCode !== 0) {
+          console.log(ui.warn(`卸载插件 ${pluginId} 失败（可能未安装），请手动执行：claude plugin uninstall ${pluginId}`));
+          console.log(ui.dim(`失败原因：${(r.stderr || r.stdout || '').split('\n')[0]}`));
+          process.exitCode = 1;
+          return;
+        }
+
+        // 移除 workspace 登记（仅 workspace 内；无登记时忽略）
+        const root = findWorkspaceRoot();
+        if (root) {
+          const data = await loadPluginFile(root);
+          if (data?.plugins[name]) {
+            delete data.plugins[name];
+            await savePluginFile(root, data);
+          }
+        }
+
+        console.log(ui.ok(`插件 ${pluginId} 已卸载。`));
+        console.log(ui.dim('重启 Claude Code 会话后 /agile:xxx 命令不再可见。'));
+      }),
+  )
+  .addCommand(
     new Command('update')
       .description('更新插件到市场最新版本（刷新市场克隆 → 强制重装；重启 Claude Code 会话后生效）')
       .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
@@ -142,6 +176,30 @@ export const pluginCommand = new Command('plugin')
         console.log(ui.ok(`插件 ${name} 已更新到市场最新版本（${marketplaceUrl}）`));
         console.log(ui.dim('重启 Claude Code 会话后生效。'));
       }),
+  )
+  .addCommand(
+    new Command('marketplace')
+      .description('插件市场注册管理（注册由 install 自动完成，此处可移除）')
+      .addCommand(
+        new Command('remove')
+          .description('取消注册插件市场仓库（Claude Code 层移除；workspace.yaml 的 plugin.marketplace 配置保留，重新 install 会自动再注册）')
+          .argument('[name]', '市场名称（默认 fcc）', MARKETPLACE_NAME)
+          .action(async (name: string) => {
+            const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
+            const r = await execa(claude, ['plugin', 'marketplace', 'remove', name], {
+              reject: false,
+              timeout: 120_000,
+              windowsHide: true,
+            });
+            if (r.exitCode !== 0) {
+              console.log(ui.warn(`取消注册市场 ${name} 失败（可能未注册），请手动执行：claude plugin marketplace remove ${name}`));
+              console.log(ui.dim(`失败原因：${(r.stderr || r.stdout || '').split('\n')[0]}`));
+              process.exitCode = 1;
+              return;
+            }
+            console.log(ui.ok(`插件市场 ${name} 已取消注册。`));
+          }),
+      ),
   )
   .addCommand(
     new Command('enable')

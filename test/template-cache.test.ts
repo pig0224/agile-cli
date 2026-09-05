@@ -4,7 +4,7 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { ensureTemplateRepo, templateCacheDir } from '../src/core/template-registry.js';
+import { cleanAllTemplateCaches, cleanTemplateCache, ensureTemplateRepo, templateCacheDir } from '../src/core/template-registry.js';
 
 /** 用本地 bare repo 做模板源（真实 git 路径，验证缓存/刷新语义） */
 function makeSource(tag: string): string {
@@ -68,5 +68,29 @@ describe('ensureTemplateRepo 缓存/刷新语义', () => {
   it('无缓存且上游不可达 → 报错', { timeout: 60_000 }, async () => {
     const url = path.join(os.tmpdir(), `agile-nope-${Date.now()}`, 'tpl.git').replace(/\\/g, '/');
     await expect(ensureTemplateRepo(url)).rejects.toThrow(/克隆失败/);
+  });
+});
+
+describe('模板缓存清理', () => {
+  it('cleanTemplateCache：有缓存 → 删除；再 clean → false；清理后可重新 clone', { timeout: 60_000 }, async () => {
+    const url = makeSource('clean-a');
+    await ensureTemplateRepo(url); // 产生缓存
+    expect(await cleanTemplateCache(url)).toBe(true);
+    await expect(fs.stat(path.join(templateCacheDir(url), '.git'))).rejects.toThrow();
+    expect(await cleanTemplateCache(url)).toBe(false); // 无缓存
+    await ensureTemplateRepo(url); // 清理后自动重新克隆
+    await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.yaml'), 'utf8')).resolves.toContain('version: 1');
+    await cleanTemplateCache(url); // 收尾清理
+  });
+
+  it('cleanAllTemplateCaches：清理全部源副本并返回数量', { timeout: 60_000 }, async () => {
+    const url1 = makeSource('clean-b1');
+    const url2 = makeSource('clean-b2');
+    await ensureTemplateRepo(url1);
+    await ensureTemplateRepo(url2);
+    const cleaned = await cleanAllTemplateCaches();
+    expect(cleaned).toBeGreaterThanOrEqual(2);
+    await expect(fs.stat(templateCacheDir(url1))).rejects.toThrow();
+    await expect(fs.stat(templateCacheDir(url2))).rejects.toThrow();
   });
 });

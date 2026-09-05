@@ -1,7 +1,9 @@
 import { Command } from 'commander';
-import { requireWorkspaceRoot } from '../core/paths.js';
-import { loadWorkspace } from '../core/config.js';
-import { loadTemplates } from '../core/template-registry.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { DEFAULT_TEMPLATE_REGISTRY, requireWorkspaceRoot } from '../core/paths.js';
+import { loadWorkspace, toYaml } from '../core/config.js';
+import { cleanAllTemplateCaches, cleanTemplateCache, loadTemplates } from '../core/template-registry.js';
 import * as ui from '../ui.js';
 
 /** 模板源：--registry 参数 > workspace.yaml templates.registry */
@@ -61,6 +63,43 @@ export const templateCommand = new Command('template')
         }
         console.log(ui.ok(`模板缓存已更新：${url}`));
         for (const issue of issues) console.log(ui.warn(issue));
+      }),
+  )
+  .addCommand(
+    new Command('clean')
+      .description('删除模板仓库的本地缓存副本（~/.agile/templates；下次使用自动重新克隆）')
+      .option('--registry <url>', '要清理的模板仓库 git URL（默认 workspace.yaml templates.registry）')
+      .option('--all', '清理全部模板缓存（所有克隆过的源）')
+      .action(async (opts: { registry?: string; all?: boolean }) => {
+        if (opts.all === true) {
+          const cleaned = await cleanAllTemplateCaches();
+          if (cleaned === 0) console.log(ui.dim('无模板缓存。'));
+          else console.log(ui.ok(`已清理 ${cleaned} 个模板缓存。`));
+          return;
+        }
+        const url = await resolveRegistryUrl(opts.registry);
+        const removed = await cleanTemplateCache(url);
+        if (removed) console.log(ui.ok(`模板缓存已清理：${url}`));
+        else console.log(ui.dim('该源无本地缓存（本地目录直读模式也没有缓存）。'));
+      }),
+  )
+  .addCommand(
+    new Command('unregister')
+      .description('取消注册模板仓库（移除 workspace.yaml 的 templates.registry 自定义配置，回退官方默认源；本地缓存不受影响）')
+      .action(async () => {
+        const root = requireWorkspaceRoot();
+        const file = path.join(root, '.agile', 'workspace.yaml');
+        const raw = await fs.readFile(file, 'utf8');
+        const doc = (await import('yaml')).parse(raw) as Record<string, unknown>;
+        const templates = doc.templates as Record<string, unknown> | undefined;
+        if (templates == null || !('registry' in templates)) {
+          console.log(ui.dim('workspace 未注册自定义模板仓库（templates.registry 未配置，当前使用官方默认源）。'));
+          return;
+        }
+        delete templates.registry;
+        if (Object.keys(templates).length === 0) delete doc.templates;
+        await fs.writeFile(file, toYaml(doc), 'utf8');
+        console.log(ui.ok(`已取消注册模板仓库（回退官方默认源：${DEFAULT_TEMPLATE_REGISTRY}）`));
       }),
   )
   .addCommand(

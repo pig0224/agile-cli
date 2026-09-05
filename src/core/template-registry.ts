@@ -159,6 +159,36 @@ export async function loadTemplates(
   return { registry, repoDir, issues, stale };
 }
 
+/**
+ * 删除模板仓库的本地缓存副本（下次使用自动重新克隆）。
+ * 返回是否实际删除（无缓存时 false）。本地目录直读模式无缓存，恒返回 false。
+ */
+export async function cleanTemplateCache(url: string): Promise<boolean> {
+  const dir = templateCacheDir(url);
+  const hasCache = await fs
+    .stat(path.join(dir, '.git'))
+    .then(() => true)
+    .catch(() => false);
+  if (!hasCache) return false;
+  await fs.rm(dir, { recursive: true, force: true });
+  return true;
+}
+
+/** 清理全部模板缓存（~/.agile/templates 下所有源副本），返回清理的缓存数 */
+export async function cleanAllTemplateCaches(): Promise<number> {
+  const root = templateCacheRoot();
+  const entries = await fs.readdir(root).catch(() => [] as string[]);
+  let cleaned = 0;
+  for (const entry of entries) {
+    const p = path.join(root, entry);
+    if (await fs.stat(p).then((s) => s.isDirectory()).catch(() => false)) {
+      await fs.rm(p, { recursive: true, force: true });
+      cleaned++;
+    }
+  }
+  return cleaned;
+}
+
 /** 从模板生成项目骨架到 target（占位符替换） */
 export async function scaffoldFromTemplate(
   repoDir: string,

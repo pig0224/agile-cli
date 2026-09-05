@@ -76,7 +76,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 |---|---|
 | `agile init workspace` | 初始化工作区骨架与 `.agile` 配置（含插件市场/模板源地址） |
 | `agile init project <name> [--template <t>]` | 创建项目到 projects/（--template 从模板生成，缺省为空项目骨架；普通目录，git add） |
-| `agile template list/update/check` | 模板注册中心：查看 / 刷新缓存 / 一致性校验 |
+| `agile template list/update/clean/unregister/check` | 模板注册中心：查看 / 刷新缓存 / 清理缓存 / 取消注册模板仓库 / 一致性校验 |
 | `agile sync [--repo] [--force] [--dry-run] [--quiet]` | 收敛外部 submodule 到 registry 声明状态 |
 | `agile status [--json]` | 外部仓库状态总览（AI 友好 JSON 输出） |
 | `agile repo add/remove/list/pin/unpin/set-url/set-branch` | registry 条目管理 |
@@ -85,7 +85,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 | `agile worktree create/list/remove` | workspace 根仓库 worktree（create 自动 sync） |
 | `agile foreach '<cmd>' [--group glob]` | 遍历 projects/ 下项目执行命令 |
 | `agile hooks run/list` | 项目钩子（批量依赖安装、codegen 等） |
-| `agile plugin install/update/enable/disable/list` | 插件管理（市场 = git 仓库，`--marketplace` 可换源；update 刷新市场并强制重装） |
+| `agile plugin install/update/uninstall/enable/disable/list` | 插件管理（市场 = git 仓库，`--marketplace` 可换源；update 刷新市场并强制重装；`plugin marketplace remove` 取消注册市场） |
 | `agile update` | CLI 自更新（npm） |
 | `agile mcp` | 启动 stdio MCP Server |
 
