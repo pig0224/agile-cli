@@ -18,7 +18,7 @@ import * as ui from '../ui.js';
 /** 抽屉目录骨架说明（README 放进各抽屉） */
 const DRAWER_READMES: Record<string, string> = {
   'tech-specs': '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\nGit Submodule，由公司规范团队维护，`agile sync` 自动同步。\n',
-  'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内目录）。\n',
+  'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（默认 workspace 仓库内目录）。\n多 workspace 团队可升级为 submodule 共享（单一事实源）：`agile repo add biz-tech-docs <团队知识库仓库 git-url>` 后 `agile sync`（骨架目录自动让位）。\n',
   'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
   projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
   'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req 或 MCP 工具 agile_task_create 生成。\n',
@@ -137,10 +137,11 @@ export const initCommand = new Command('init')
 
         console.log(ui.ok(`workspace 初始化完成：${root}`));
         console.log(ui.dim('下一步：'));
-        console.log(ui.dim('  1. agile repo add tech-specs <公司规范仓库 git-url>   # 登记外部规范仓库（唯一需要 submodule 的）'));
-        console.log(ui.dim('  2. agile sync                                          # 同步外部仓库'));
-        console.log(ui.dim('  3. agile template list                                 # 查看项目模板'));
-        console.log(ui.dim('  4. agile plugin install agile                          # 安装 Claude Code 插件'));
+        console.log(ui.dim('  1. agile repo add tech-specs <公司规范仓库 git-url>       # 登记公司级规范（submodule）'));
+        console.log(ui.dim('  2. agile repo add biz-tech-docs <团队知识库仓库 git-url>  # 可选：多 workspace 团队共享知识库（submodule）'));
+        console.log(ui.dim('  3. agile sync                                            # 同步外部仓库'));
+        console.log(ui.dim('  4. agile template list                                   # 查看项目模板'));
+        console.log(ui.dim('  5. agile plugin install agile                            # 安装 Claude Code 插件'));
       }),
   )
   .addCommand(

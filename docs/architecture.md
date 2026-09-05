@@ -6,17 +6,17 @@
 
 **workspace = 单一 git 仓库**。曾采用多仓 submodule 模式解决角色权限隔离，代价是跨模块变更需要多 PR + 指针滚动。现改为单仓 + CODEOWNERS 目录级权限治理：
 
-- biz-tech-docs / biz-product-docs / projects / process-docs = 普通目录
+- biz-product-docs / projects / process-docs = 普通目录
 - **跨模块变更一个 PR 天然原子**（前后端代码 + 过程文档一起 review、一起 merge）
 - 发版 = workspace 仓库打 tag（可目录级 tag，如 `projects/order-service/v1.2.0`）
-- **registry.yaml 收窄为外部仓库登记处**：只管 tech-specs 这类公司级 submodule（跨团队共享、独立演进、团队无写权限），`agile sync` 收敛，pin 可锁版本
+- **registry.yaml 收窄为外部仓库登记处**：tech-specs 这类公司级 submodule（跨团队共享、独立演进、团队无写权限）；以及可选的 biz-tech-docs 团队知识库 submodule（多 workspace 共享单一事实源）——`agile sync` 收敛，pin 可锁版本
 
 ```
 workspace/                  # 单一 git 仓库（团队）
 ├── .gitmodules             # 仅外部 submodule
 ├── .agile/                 # workspace.yaml / registry.yaml / plugin.yaml
 ├── tech-specs/             # 抽屉一（submodule，sync 管理）
-├── biz-tech-docs/          # 抽屉二（普通目录）
+├── biz-tech-docs/          # 抽屉二（默认普通目录；多 workspace 团队登记为 submodule，sync 管理）
 ├── biz-product-docs/       # 抽屉三（普通目录）
 ├── projects/               # 抽屉四（普通目录，模板脚手架落此）
 └── process-docs/           # 抽屉五（普通目录，STO-xxx 标准任务目录：五文档 + be/fe 角色文件）

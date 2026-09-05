@@ -9,7 +9,7 @@
 
 **One root, five drawers** — 一个 workspace 根 + 五个抽屉的研发工作区 CLI。
 
-**单仓模式**：整个团队一个 git 仓库（biz-tech-docs / projects / process-docs 都是普通目录），跨模块变更一个 PR 天然原子；只有公司级规范（tech-specs 等）作为外部 submodule 由 `.agile/registry.yaml` 登记、`agile sync` 收敛——**registry 是唯一事实源**。
+**单仓模式**：整个团队一个 git 仓库（biz-product-docs / projects / process-docs 都是普通目录），跨模块变更一个 PR 天然原子；外部 submodule 由 `.agile/registry.yaml` 登记、`agile sync` 收敛——**registry 是唯一事实源**。两类：tech-specs 这类公司级规范（必选）；多 workspace 团队共享的团队知识库 biz-tech-docs（可选升级，单一事实源）。
 
 **本仓库只做 CLI（npm 包）**。配套的两个 git 仓库与本 CLI 解耦，扩展它们不需要本仓库发版：
 
@@ -33,8 +33,9 @@ npm install -g fcc-agile-cli
 mkdir my-workspace && cd my-workspace
 agile init workspace --name my-workspace
 
-# 2. 登记公司规范仓库（唯一需要 submodule 的抽屉）
+# 2. 登记外部仓库（公司规范必选；多 workspace 团队可加登记团队知识库，均以 submodule 挂载）
 agile repo add tech-specs git@gitlab.corp:specs/tech-specs.git
+agile repo add biz-tech-docs git@gitlab.corp:kb/tech-docs.git   # 可选：团队知识库跨 workspace 共享
 agile sync
 
 # 3. 新建项目（模板来自模板注册中心 git 仓库，落 projects/ 普通目录）
@@ -63,7 +64,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 │   ├── registry.yaml            # 外部仓库登记处（唯一事实源）
 │   └── plugin.yaml              # 已安装插件登记
 ├── tech-specs/                  # 抽屉一：公司级技术规范（submodule）
-├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（普通目录）
+├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（默认普通目录；多 workspace 团队可登记为 submodule）
 ├── biz-product-docs/            # 抽屉三：产品设计知识库（普通目录）
 ├── projects/                    # 抽屉四：项目代码（普通目录，模板脚手架直接落此）
 └── process-docs/                # 抽屉五：过程产物（STO-xxx 标准任务目录，普通目录）
