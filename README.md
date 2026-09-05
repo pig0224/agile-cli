@@ -85,8 +85,8 @@ my-workspace/                    # 单一 git 仓库（团队）
 | `agile worktree create/list/remove` | workspace 根仓库 worktree（create 自动 sync） |
 | `agile foreach '<cmd>' [--group glob]` | 遍历 projects/ 下项目执行命令 |
 | `agile hooks run/list` | 项目钩子（批量依赖安装、codegen 等） |
-| `agile plugin install/enable/disable/list` | 插件管理（市场 = git 仓库，`--marketplace` 可换源） |
-| `agile update --cli` | CLI 自更新（npm） |
+| `agile plugin install/update/enable/disable/list` | 插件管理（市场 = git 仓库，`--marketplace` 可换源；update 刷新市场并强制重装） |
+| `agile update` | CLI 自更新（npm） |
 | `agile mcp` | 启动 stdio MCP Server |
 
 > 任务目录（STO-xxx 标准任务目录）不注册 CLI 命令，仅通过 MCP 工具 `agile_task_create` 暴露（供插件命令 /agile:sync-req 等调用）。

@@ -70,6 +70,80 @@ export const pluginCommand = new Command('plugin')
       }),
   )
   .addCommand(
+    new Command('update')
+      .description('更新插件到市场最新版本（刷新市场克隆 → 强制重装；重启 Claude Code 会话后生效）')
+      .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
+      .option('--marketplace <url>', '插件市场 git 地址（默认 workspace.yaml plugin.marketplace）')
+      .option('--marketplace-name <name>', '市场名称（claude plugin install 的 @ 后缀）', MARKETPLACE_NAME)
+      .action(async (name: string, opts: { marketplace?: string; marketplaceName: string }) => {
+        // 解析市场地址：--marketplace 参数 > workspace.yaml plugin.marketplace > 官方默认（workspace 外也可更新）
+        const root = findWorkspaceRoot();
+        let marketplaceUrl = opts.marketplace ?? DEFAULT_PLUGIN_MARKETPLACE;
+        if (root) {
+          const workspace = await loadWorkspace(root);
+          marketplaceUrl = opts.marketplace ?? workspace.plugin.marketplace;
+        } else {
+          console.log(ui.dim('当前不在 agile workspace 内：使用官方默认市场。'));
+        }
+        const claude = process.env.CLAUDE_CODE_CLI ?? 'claude';
+        const pluginId = `${name}@${opts.marketplaceName}`;
+
+        // 1. 注册市场（幂等；未注册时兜底）
+        const add = await execa(claude, ['plugin', 'marketplace', 'add', marketplaceUrl], {
+          reject: false,
+          timeout: 120_000,
+          windowsHide: true,
+        });
+        if (add.exitCode !== 0) {
+          console.log(ui.warn(`注册插件市场失败，请手动执行：claude plugin marketplace add ${marketplaceUrl}`));
+          console.log(ui.dim(`失败原因：${(add.stderr || add.stdout || '').split('\n')[0]}`));
+          process.exitCode = 1;
+          return;
+        }
+
+        // 2. 刷新市场克隆到远程最新——add 对已注册市场幂等不拉新，必须显式 update
+        const mup = await execa(claude, ['plugin', 'marketplace', 'update', opts.marketplaceName], {
+          reject: false,
+          timeout: 120_000,
+          windowsHide: true,
+        });
+        if (mup.exitCode !== 0) {
+          console.log(ui.warn(`刷新市场失败，请手动执行：claude plugin marketplace update ${opts.marketplaceName}`));
+          console.log(ui.dim(`失败原因：${(mup.stderr || mup.stdout || '').split('\n')[0]}`));
+          process.exitCode = 1;
+          return;
+        }
+
+        // 3. 强制重装：git 分发模式 plugin.json version 不变，claude plugin update 会判「已是最新」跳过，
+        //    uninstall + install 才能装到市场克隆的最新内容（uninstall 未安装时失败可忽略）。
+        await execa(claude, ['plugin', 'uninstall', pluginId], { reject: false, timeout: 120_000, windowsHide: true });
+        const install = await execa(claude, ['plugin', 'install', pluginId], {
+          reject: false,
+          timeout: 120_000,
+          windowsHide: true,
+        });
+        if (install.exitCode !== 0) {
+          console.log(ui.warn(`重装插件 ${pluginId} 失败，请手动执行：claude plugin install ${pluginId}`));
+          console.log(ui.dim(`失败原因：${(install.stderr || install.stdout || '').split('\n')[0]}`));
+          process.exitCode = 1;
+          return;
+        }
+
+        // 4. 登记 .agile/plugin.yaml（source = 市场 git 地址；仅 workspace 内登记）
+        if (root) {
+          const data = (await loadPluginFile(root)) ?? { version: 1, plugins: {} };
+          data.plugins[name] = {
+            source: marketplaceUrl,
+            enabled: true,
+          };
+          await savePluginFile(root, data);
+        }
+
+        console.log(ui.ok(`插件 ${name} 已更新到市场最新版本（${marketplaceUrl}）`));
+        console.log(ui.dim('重启 Claude Code 会话后生效。'));
+      }),
+  )
+  .addCommand(
     new Command('enable')
       .description('启用已安装的插件（缺省为内置插件 agile）')
       .argument('[name]', '插件名（默认 agile）', BUILTIN)
