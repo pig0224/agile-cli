@@ -1,3 +1,21 @@
+## v2.0.0 (2026-09-06)
+
+> bump: major
+
+### Breaking Changes
+
+- feat!: 废弃 MCP Server 与 --default-branch，AI 与人共用 CLI 单一入口 ([`c14cc01`](https://github.com/pig0224/agile-cli/commit/c14cc01b24404b46e8f5feaa6661eb66111a2e89))
+- feat!: 配置收敛为 settings.json，sync 四合一拉取，命令裁剪为 8 个 ([`412b34e`](https://github.com/pig0224/agile-cli/commit/412b34e29f16bc95bf264adbeec81d510d7d98ce))
+
+### Features
+
+- feat: 查询类命令 workspace 外优雅降级 ([`2d87480`](https://github.com/pig0224/agile-cli/commit/2d874801d4501b68309ffd380cc9f8fabf34e040))
+- feat: plugin/template 补卸载与取消注册命令 ([`ceb45a0`](https://github.com/pig0224/agile-cli/commit/ceb45a05030d584e2a96c6660adf270e9b62cea0))
+
+### Fixes
+
+- fix(update): 插件更新挪至 agile plugin update 并修复失效更新链路 ([`74882d5`](https://github.com/pig0224/agile-cli/commit/74882d510db3d9138530105bff34dd79d9e68170))
+
 ## v1.3.0 (2026-09-05)
 
 > bump: minor
