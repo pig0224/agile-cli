@@ -1,6 +1,6 @@
 {
   "name": "fcc-agile-cli",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Agile workspace CLI — one root, five drawers. Single-repo workspace: external resources (company specs, team knowledge base, project templates, Claude Code plugins) pulled by one sync command, with worktree management and project scaffolding from a git template registry. AI agents use the CLI directly via Bash. (一个根、五个抽屉的 Workspace 生命周期管理 CLI)",
   "type": "module",
   "bin": {

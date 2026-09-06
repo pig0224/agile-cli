@@ -1,3 +1,11 @@
+## v2.0.1 (2026-09-06)
+
+> bump: patch
+
+### Fixes
+
+- fix: 全面审查修复（worktree 防误删、项目名校验、biz-tech-docs 入库语义、插件选项收敛等） ([`678ae9c`](https://github.com/pig0224/agile-cli/commit/678ae9c77053387f96156b299ae885b15c793e8d))
+
 ## v2.0.0 (2026-09-06)
 
 > bump: major
