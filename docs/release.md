@@ -25,7 +25,9 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 
 ## 1. CI（[.github/workflows/ci.yml](../.github/workflows/ci.yml)）
 
-触发：所有 PR（PR-only 门禁；push main 不触发——`chore(release)` 发版提交经 admin 通道直推 main，其质量由 release.yml 的 validate job 兜底）。
+触发：所有 PR（PR-only 门禁；push main 不触发）。
+
+**发版 push 豁免规则**（2026-09-06 定稿）：`chore(release)` 发版提交与 tag 的直推**豁免 PR-only 门禁**。授权边界 = 分支保护仅 admin 可直推（enforce_admins=false），其余成员一律走 PR + CI 进 main。发版质量不依赖 CI——由 release.yml 的 validate job 全量兜底（install → typecheck → test → build → CLI 冒烟），publish 串行其后。
 
 矩阵：ubuntu × Node 24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/config --help）`。
 
@@ -50,4 +52,4 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 
 - [x] GitHub 仓库创建、代码推送、`NPM_TOKEN` secret 配置、默认地址替换
 - [x] v1.0.0 / v1.1.0 已发布
-- [ ] 后续发版：`npm run release` → 确认 CI/wait-for-ci 全绿 → 验证 npm 版本与文档站
+- [ ] 后续发版：`npm run release` → release.yml validate/publish 全绿 → 验证 npm 版本与文档站
