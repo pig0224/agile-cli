@@ -17,6 +17,8 @@
    ├── dryRun                   → skipped [dry-run]
    └── 干净                     → fetch origin + merge --ff-only @{upstream}
                                   失败 → failed（分叉/force-push，交人工）
+   已登记抽屉未进 .gitignore → 自动补写忽略行（幂等；dry-run 只出计划，写失败降级 warn）
+   bizTechDocs 未登记但 .gitignore 残留忽略行 → warn（知识库默认随 workspace 入库，提示人工删行）
    ref 版本锁定（预留）          → 追加 warn「锁定暂未实现，按最新拉取」（不阻断）
 
 ② templates
@@ -44,6 +46,7 @@
 | 本地路径 URL | 统一 `-c protocol.file.allow=always`（git 安全默认限制 file 协议） |
 | 目录非空且非骨架 | 拒绝 clone，failed 提示人工处理 |
 | 拉取只进不退 | 只 pull 不 reset，不处理远端 force-push |
+| 外部目录未进 .gitignore | 自动补写忽略行（幂等；写失败才 warn——settings.paths 手改后遗漏 .gitignore 的防线） |
 | 插件同步 | 绝不卸载：声明删除 ≠ 本机卸载（卸载走 `agile plugin uninstall` / `claude plugin uninstall`） |
 
 ## 3. 骨架目录让位

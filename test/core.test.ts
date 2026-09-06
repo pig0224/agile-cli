@@ -6,7 +6,7 @@ import { findWorkspaceRoot, requireWorkspaceRoot } from '../src/core/paths.js';
 import { parseYaml, loadSettings, saveSettings } from '../src/core/config.js';
 import { SettingsSchema } from '../src/core/schemas.js';
 import { AgileError } from '../src/core/errors.js';
-import { scaffoldEmptyProject } from '../src/core/scaffold.js';
+import { assertProjectName, scaffoldEmptyProject } from '../src/core/scaffold.js';
 
 function tmp(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'agile-test-'));
@@ -91,6 +91,18 @@ describe('config 读写', () => {
 });
 
 describe('scaffold', () => {
+  it('assertProjectName：合法名通过，路径穿越/大写/空格/空名拒绝', () => {
+    expect(() => assertProjectName('order-service')).not.toThrow();
+    expect(() => assertProjectName('demo1')).not.toThrow();
+    expect(() => assertProjectName('../evil')).toThrow(AgileError);
+    expect(() => assertProjectName('a/b')).toThrow(AgileError);
+    expect(() => assertProjectName('a\\b')).toThrow(AgileError);
+    expect(() => assertProjectName('Order')).toThrow(AgileError);
+    expect(() => assertProjectName('a b')).toThrow(AgileError);
+    expect(() => assertProjectName('.')).toThrow(AgileError);
+    expect(() => assertProjectName('')).toThrow(AgileError);
+  });
+
   it('scaffoldEmptyProject 生成空项目骨架（仅 README，含项目名）', async () => {
     const dir = await tmp();
     const dest = path.join(dir, 'projects', 'my-lib');

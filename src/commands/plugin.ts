@@ -17,22 +17,20 @@ async function recordDependency(root: string, name: string, marketplaceName: str
 
 export const pluginCommand = new Command('plugin')
   .description(
-    'Claude Code 插件管理（类 npm 心智；插件市场为独立 git 仓库，新增插件无需升级 CLI；依赖声明登记在 .agile/settings.json 的 plugins.dependencies，agile sync 按声明补装；换源：agile config set plugin-repo <git-url>）',
+    'Claude Code 插件管理（类 npm 心智；插件市场为独立 git 仓库，新增插件无需升级 CLI；依赖声明登记在 .agile/settings.json 的 plugins.dependencies，agile sync 按声明补装；换源：agile config set plugin-repo <git-url>，换源目标市场（如镜像）需保持 marketplace.json 的 name=fcc；异名第三方市场请直接用 claude plugin 命令）',
   )
   .addCommand(
     new Command('install')
       .description('从插件市场安装插件并登记依赖声明，默认 agile（类 npm install --save）')
       .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
-      .option('--marketplace <url>', '插件市场 git 地址（默认 settings.json plugins.marketplace）')
-      .option('--marketplace-name <name>', '市场名称（claude plugin install 的 @ 后缀）', MARKETPLACE_NAME)
-      .action(async (name: string, opts: { marketplace?: string; marketplaceName: string }) => {
-        // 1. 解析市场地址：--marketplace 参数 > settings.json plugins.marketplace > 官方默认
-        //    workspace 外也可安装（仅跳过依赖声明）
+      .action(async (name: string) => {
+        // 1. 解析市场地址：settings.json plugins.marketplace（workspace 外用官方默认），
+        //    市场名固定 fcc（claude plugin install 的 @ 后缀）。workspace 外也可安装（仅跳过依赖声明）
         const root = findWorkspaceRoot();
-        let marketplaceUrl = opts.marketplace ?? DEFAULT_PLUGIN_MARKETPLACE;
+        let marketplaceUrl = DEFAULT_PLUGIN_MARKETPLACE;
         if (root) {
           const settings = await loadSettings(root);
-          marketplaceUrl = opts.marketplace ?? settings.plugins.marketplace;
+          marketplaceUrl = settings.plugins.marketplace;
         } else {
           console.log(ui.dim('当前不在 agile workspace 内：使用官方默认市场，且不登记依赖声明。'));
         }
@@ -42,22 +40,22 @@ export const pluginCommand = new Command('plugin')
         if (add.exitCode !== 0) {
           console.log(ui.warn('注册插件市场失败，请手动执行：'));
           console.log(ui.dim(`  claude plugin marketplace add ${marketplaceUrl}`));
-          console.log(ui.dim(`  claude plugin install ${name}@${opts.marketplaceName}`));
+          console.log(ui.dim(`  claude plugin install ${name}@${MARKETPLACE_NAME}`));
           console.log(ui.dim(`失败原因：${(add.stderr || add.stdout || '').split('\n')[0]}`));
           process.exitCode = 1;
           return;
         }
-        const install = await runClaude(['plugin', 'install', `${name}@${opts.marketplaceName}`]);
+        const install = await runClaude(['plugin', 'install', `${name}@${MARKETPLACE_NAME}`]);
         if (install.exitCode !== 0) {
           console.log(ui.warn(`安装插件 ${name} 失败，请手动执行：`));
-          console.log(ui.dim(`  claude plugin install ${name}@${opts.marketplaceName}`));
+          console.log(ui.dim(`  claude plugin install ${name}@${MARKETPLACE_NAME}`));
           console.log(ui.dim(`失败原因：${(install.stderr || install.stdout || '').split('\n')[0]}`));
           process.exitCode = 1;
           return;
         }
 
         // 3. 登记依赖声明（仅 workspace 内；安装实况由 Claude Code 全局管理）
-        if (root) await recordDependency(root, name, opts.marketplaceName);
+        if (root) await recordDependency(root, name, MARKETPLACE_NAME);
 
         console.log(ui.ok(`插件 ${name} 已安装（市场：${marketplaceUrl}）`));
         console.log(ui.dim('重启 Claude Code 会话后即可使用 /agile:xxx 系列命令。'));
@@ -67,9 +65,8 @@ export const pluginCommand = new Command('plugin')
     new Command('uninstall')
       .description('卸载插件并移除依赖声明（缺省为内置插件 agile；重启 Claude Code 会话生效）')
       .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
-      .option('--marketplace-name <name>', '市场名称（claude plugin uninstall 的 @ 后缀）', MARKETPLACE_NAME)
-      .action(async (name: string, opts: { marketplaceName: string }) => {
-        const pluginId = `${name}@${opts.marketplaceName}`;
+      .action(async (name: string) => {
+        const pluginId = `${name}@${MARKETPLACE_NAME}`;
         const r = await runClaude(['plugin', 'uninstall', pluginId]);
         if (r.exitCode !== 0) {
           console.log(ui.warn(`卸载插件 ${pluginId} 失败（可能未安装），请手动执行：claude plugin uninstall ${pluginId}`));
@@ -96,19 +93,17 @@ export const pluginCommand = new Command('plugin')
     new Command('update')
       .description('更新插件到市场最新版本并登记声明（刷新市场克隆 → 强制重装；重启 Claude Code 会话后生效）')
       .argument('[name]', '插件名（市场 marketplace.json 中登记的名字）', BUILTIN)
-      .option('--marketplace <url>', '插件市场 git 地址（默认 settings.json plugins.marketplace）')
-      .option('--marketplace-name <name>', '市场名称（claude plugin install 的 @ 后缀）', MARKETPLACE_NAME)
-      .action(async (name: string, opts: { marketplace?: string; marketplaceName: string }) => {
-        // 解析市场地址：--marketplace 参数 > settings.json plugins.marketplace > 官方默认（workspace 外也可更新）
+      .action(async (name: string) => {
+        // 解析市场地址：settings.json plugins.marketplace（workspace 外用官方默认）；市场名固定 fcc
         const root = findWorkspaceRoot();
-        let marketplaceUrl = opts.marketplace ?? DEFAULT_PLUGIN_MARKETPLACE;
+        let marketplaceUrl = DEFAULT_PLUGIN_MARKETPLACE;
         if (root) {
           const settings = await loadSettings(root);
-          marketplaceUrl = opts.marketplace ?? settings.plugins.marketplace;
+          marketplaceUrl = settings.plugins.marketplace;
         } else {
           console.log(ui.dim('当前不在 agile workspace 内：使用官方默认市场。'));
         }
-        const pluginId = `${name}@${opts.marketplaceName}`;
+        const pluginId = `${name}@${MARKETPLACE_NAME}`;
 
         // 1. 注册市场（幂等；未注册时兜底）
         const add = await runClaude(['plugin', 'marketplace', 'add', marketplaceUrl]);
@@ -120,9 +115,9 @@ export const pluginCommand = new Command('plugin')
         }
 
         // 2. 刷新市场克隆到远程最新——add 对已注册市场幂等不拉新，必须显式 update
-        const mup = await runClaude(['plugin', 'marketplace', 'update', opts.marketplaceName]);
+        const mup = await runClaude(['plugin', 'marketplace', 'update', MARKETPLACE_NAME]);
         if (mup.exitCode !== 0) {
-          console.log(ui.warn(`刷新市场失败，请手动执行：claude plugin marketplace update ${opts.marketplaceName}`));
+          console.log(ui.warn(`刷新市场失败，请手动执行：claude plugin marketplace update ${MARKETPLACE_NAME}`));
           console.log(ui.dim(`失败原因：${(mup.stderr || mup.stdout || '').split('\n')[0]}`));
           process.exitCode = 1;
           return;
@@ -140,7 +135,7 @@ export const pluginCommand = new Command('plugin')
         }
 
         // 4. 登记依赖声明（仅 workspace 内登记）
-        if (root) await recordDependency(root, name, opts.marketplaceName);
+        if (root) await recordDependency(root, name, MARKETPLACE_NAME);
 
         console.log(ui.ok(`插件 ${name} 已更新到市场最新版本（${marketplaceUrl}）`));
         console.log(ui.dim('重启 Claude Code 会话后生效。'));

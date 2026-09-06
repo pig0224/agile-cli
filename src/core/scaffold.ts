@@ -1,10 +1,25 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { AgileError } from './errors.js';
 
 /** java 包名安全段：小写字母数字，非法字符折叠 */
 export function safePackageSegment(name: string): string {
   const seg = name.toLowerCase().replace(/[^a-z0-9]/g, '');
   return seg.length > 0 ? seg : 'app';
+}
+
+/** 项目名规范：小写字母开头，仅小写字母/数字/连字符。
+ *  项目名同时用作 projects/ 目录名与模板 {{name}} 占位（npm name / go module / 包名等），
+ *  必须在这些位置都合法；同时杜绝路径穿越（/ \ .. 等）。 */
+export const PROJECT_NAME_RE = /^[a-z][a-z0-9-]*$/;
+
+/** 校验项目名，不合法抛出中文错误（init project 使用） */
+export function assertProjectName(name: string): void {
+  if (!PROJECT_NAME_RE.test(name)) {
+    throw new AgileError(
+      `项目名不合法（格式 ^[a-z][a-z0-9-]*$，仅小写字母/数字/连字符——项目名同时用作目录名、npm 包名与 go module）：${name}`,
+    );
+  }
 }
 
 const TEXT_EXT = new Set([

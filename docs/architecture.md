@@ -9,14 +9,14 @@
 - biz-product-docs / projects / process-docs = 普通目录
 - **跨模块变更一个 PR 天然原子**（前后端代码 + 过程文档一起 review、一起 merge）
 - 发版 = workspace 仓库打 tag（可目录级 tag，如 `projects/order-service/v1.2.0`）
-- **外部资源不进 workspace 仓库**：tech-specs（公司级规范，跨团队共享、独立演进、团队无写权限）与 biz-tech-docs（多 workspace 共享的团队知识库，可选）目录写入 .gitignore，各自是独立 git 仓库，由 `agile sync` clone/快进拉取——**本地改动优先，绝不覆盖**（这些目录是可写工作区，知识库命令会直接落盘）
+- **外部资源不进 workspace 仓库（按登记）**：tech-specs（公司级规范，跨团队共享、独立演进、团队无写权限）恒写入 .gitignore；biz-tech-docs（团队知识库）登记为外部仓库后才写入 .gitignore——未登记时它是 workspace 内普通目录（随仓库提交、worktree 天然可用）。已登记目录各自是独立 git 仓库，由 `agile sync` clone/快进拉取——**本地改动优先，绝不覆盖**（这些目录是可写工作区，知识库命令会直接落盘）
 
 ```
 workspace/                  # 单一 git 仓库（团队）
-├── .gitignore              # 忽略 .worktrees/、tech-specs/、biz-tech-docs/
+├── .gitignore              # 忽略 .worktrees/、tech-specs/；biz-tech-docs 登记后由 sync 自动补写
 ├── .agile/settings.json    # 唯一配置
 ├── tech-specs/             # 抽屉一（独立 git 仓库，不入库，sync 管理）
-├── biz-tech-docs/          # 抽屉二（默认普通目录；config set 登记为外部仓库后不入库，sync 管理）
+├── biz-tech-docs/          # 抽屉二（默认普通目录随仓库入库；config set 登记为外部仓库后不入库，sync 管理）
 ├── biz-product-docs/       # 抽屉三（普通目录）
 ├── projects/               # 抽屉四（普通目录，模板脚手架落此）
 └── process-docs/           # 抽屉五（普通目录，STO-xxx 标准任务目录：五文档 + be/fe 角色文件）

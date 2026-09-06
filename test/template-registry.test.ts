@@ -75,10 +75,19 @@ describe('validateTemplateRepo', () => {
     expect(issues.join('\n')).toContain('规范');
   });
 
-  it('目录名与 name 不一致 → 报错（一目录一身份）', async () => {
+  it('path 与 name 不一致 → 报错（一级同名目录）', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite', path: './vue', dirName: 'vue' }]);
     const issues = await validateTemplateRepo(repoDir, registry);
-    expect(issues.join('\n')).toContain('目录名 "vue" 与 name 不一致');
+    expect(issues.join('\n')).toContain('一级目录');
+  });
+
+  it('path 嵌套在另一模板目录内 → 报错（防别名绕过）', async () => {
+    const { repoDir, registry } = await makeRepo([
+      { name: 'vue3-vite' },
+      { name: 'vue3-sub', path: './vue3-vite/sub', dirName: 'vue3-vite/sub' },
+    ]);
+    const issues = await validateTemplateRepo(repoDir, registry);
+    expect(issues.join('\n')).toContain('一级目录');
   });
 
   it('两个 name 指向同一目录 → 冲突', async () => {

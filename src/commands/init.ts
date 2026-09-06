@@ -6,22 +6,21 @@ import {
   DEFAULT_PATHS,
   DEFAULT_PLUGIN_MARKETPLACE,
   DEFAULT_TEMPLATE_REGISTRY,
-  DRAWER_PATHS,
   requireWorkspaceRoot,
 } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
 import { git } from '../core/git.js';
 import { loadTemplates, scaffoldFromTemplate, TEMPLATE_NAME_RE } from '../core/template-registry.js';
-import { scaffoldEmptyProject } from '../core/scaffold.js';
+import { assertProjectName, scaffoldEmptyProject } from '../core/scaffold.js';
 import * as ui from '../ui.js';
 
-/** 抽屉目录骨架说明（README 放进各抽屉） */
-const DRAWER_READMES: Record<string, string> = {
-  'tech-specs': '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n外部 git 仓库（公司规范团队维护），目录不入 workspace 仓库（.gitignore 忽略）：`agile config set tech-specs <git-url>` 登记后 `agile sync` 自动 clone/拉取。\n',
-  'biz-tech-docs': '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（默认 workspace 仓库内目录）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源，同样不入库）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`（骨架目录自动让位）。\n',
-  'biz-product-docs': '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
+/** 抽屉骨架说明（README 放进各抽屉；key 与 settings.paths 的键一致） */
+const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
+  techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n外部 git 仓库（公司规范团队维护），目录不入 workspace 仓库（.gitignore 忽略）：`agile config set tech-specs <git-url>` 登记后 `agile sync` 自动 clone/拉取。\n',
+  bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内普通目录，随仓库提交获得版本管理）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`——登记后目录改为 .gitignore 忽略、不入 workspace 仓库（sync 自动补写忽略行），骨架目录自动让位。\n',
+  bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
   projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
-  'process-docs': '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
+  processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
 };
 
 async function exists(p: string): Promise<boolean> {
@@ -130,7 +129,7 @@ export const initCommand = new Command('init')
             if (migrated) {
               console.log(ui.warn('检测到旧版 .agile 配置（workspace.yaml / registry.yaml / plugin.yaml），已自动迁移到 .agile/settings.json。'));
               console.log(ui.dim('旧文件内容已全部并入，确认无误后请人工删除：git rm .agile/workspace.yaml .agile/registry.yaml .agile/plugin.yaml'));
-              console.log(ui.dim('注意：tech-specs / biz-tech-docs 现由 agile sync 管理（目录不入库、走 .gitignore）；若此前登记为 submodule，请先人工执行 git submodule deinit --all 再 agile sync。'));
+              console.log(ui.dim('注意：已登记的 tech-specs / biz-tech-docs 现由 agile sync 管理（目录不入库、走 .gitignore）；若此前登记为 submodule，请先人工执行 git submodule deinit --all 再 agile sync。'));
             } else {
               const settings = {
                 version: 1,
@@ -148,18 +147,20 @@ export const initCommand = new Command('init')
             }
           }
 
-          // 抽屉骨架
-          for (const drawer of DRAWER_PATHS) {
+          // 抽屉骨架：目录与 README 一律按 settings.paths 落地（含迁移/手改过的自定义路径）
+          const settings = await loadSettings(root);
+          for (const [key, drawer] of Object.entries(settings.paths)) {
             const dir = path.join(root, drawer);
             await fs.mkdir(dir, { recursive: true });
             const readme = path.join(dir, 'README.md');
-            if (!(await exists(readme)) && DRAWER_READMES[drawer]) {
-              await fs.writeFile(readme, DRAWER_READMES[drawer]!, 'utf8');
+            const content = DRAWER_READMES[key as keyof typeof DEFAULT_PATHS];
+            if (!(await exists(readme)) && content) {
+              await fs.writeFile(readme, content, 'utf8');
             }
           }
 
           // 产品 PRD 写作模板（幂等）
-          const prdTemplate = path.join(root, 'biz-product-docs', 'templates', 'PRD模板.md');
+          const prdTemplate = path.join(root, settings.paths.bizProductDocs, 'templates', 'PRD模板.md');
           if (!(await exists(prdTemplate))) {
             await fs.mkdir(path.dirname(prdTemplate), { recursive: true });
             await fs.writeFile(prdTemplate, PRD_TEMPLATE, 'utf8');
@@ -170,7 +171,9 @@ export const initCommand = new Command('init')
             await git(root, ['init', '-b', 'main']);
           }
 
-          // 根 .gitignore：幂等确保三行——worktree 开发目录 + 两个外部仓库抽屉（不入库）
+          // 根 .gitignore：幂等补缺——worktree 开发目录 + tech-specs（公司级规范，天然外部仓库，始终忽略）；
+          // biz-tech-docs 仅在登记为外部仓库时忽略（默认 workspace 内普通目录，随仓库提交获得版本管理），
+          // 后补登记由 agile sync 拉取成功后自动补写该行
           const gitignore = path.join(root, '.gitignore');
           let gi = '';
           try {
@@ -184,7 +187,11 @@ export const initCommand = new Command('init')
               .map((l) => l.trim())
               .filter(Boolean),
           );
-          const missing = ['.worktrees/', 'tech-specs/', 'biz-tech-docs/'].filter((l) => !have.has(l));
+          const missing = [
+            '.worktrees/',
+            `${settings.paths.techSpecs}/`,
+            ...(settings.repos.bizTechDocs?.url ? [`${settings.paths.bizTechDocs}/`] : []),
+          ].filter((l) => !have.has(l));
           if (missing.length > 0) {
             gi = gi === '' ? `${missing.join('\n')}\n` : `${gi.replace(/\n*$/, '\n')}${missing.join('\n')}\n`;
             await fs.writeFile(gitignore, gi, 'utf8');
@@ -196,7 +203,6 @@ export const initCommand = new Command('init')
             await fs.writeFile(gitattributes, '* text=auto eol=lf\n*.bat text eol=crlf\n*.cmd text eol=crlf\n', 'utf8');
           }
 
-          const settings = await loadSettings(root);
           console.log(ui.ok(`workspace 初始化完成：${root}`));
           console.log(ui.dim('下一步：'));
           let n = 1;
@@ -204,7 +210,7 @@ export const initCommand = new Command('init')
             console.log(ui.dim(`  ${n++}. agile config set tech-specs <公司规范仓库 git-url>       # 登记公司级规范（不入库，agile sync 拉取）`));
           }
           if (!settings.repos.bizTechDocs?.url) {
-            console.log(ui.dim(`  ${n++}. agile config set biz-tech-docs <团队知识库仓库 git-url>  # 可选：多 workspace 团队共享知识库`));
+            console.log(ui.dim(`  ${n++}. agile config set biz-tech-docs <团队知识库仓库 git-url>  # 可选：多 workspace 团队共享知识库（登记后目录改为外部仓库、不入库）`));
           }
           console.log(ui.dim(`  ${n++}. agile sync            # 拉取外部仓库 + 模板缓存 + 插件`));
           console.log(ui.dim(`  ${n++}. agile template list   # 查看项目模板`));
@@ -219,6 +225,9 @@ export const initCommand = new Command('init')
       .option('--template <template>', '模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
       .action(async (name: string, opts: { template?: string }) => {
         const root = requireWorkspaceRoot();
+        // 项目名校验：同时用作 projects/ 目录名与模板 {{name}} 占位（npm name / go module 等），
+        // 且杜绝 ../ 路径穿越出 projects/
+        assertProjectName(name);
         const settings = await loadSettings(root);
         const repoPath = `${settings.paths.projects}/${name}`;
         const abs = path.join(root, repoPath);

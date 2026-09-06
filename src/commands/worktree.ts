@@ -35,7 +35,7 @@ export const worktreeCommand = new Command('worktree')
           '分支来源三分支：① 本地已有该分支 → 直接检出；② 远端 origin 已有 → 跟踪检出（协作场景：负责人推了需求分支，另一端直接拉取）；',
           '③ 都没有 → 以 --base（默认当前 HEAD）新建分支。',
           '创建前自动同步主仓外部资源（同 agile sync，失败仅警告不阻塞）；创建后自动在 worktree 内补一次 sync',
-          '（settings.json 随仓库检出，而 tech-specs/biz-tech-docs 不入库，需在 worktree 内独立 clone/拉取）。',
+          '（settings.json 随仓库检出，而已登记的外部仓库 tech-specs/biz-tech-docs 不入库，需在 worktree 内独立 clone/拉取）。',
         ].join('\n        '),
       )
       .argument('<branch>', '开发分支名，如 feature/STO-001（目录名中 / 与 \\ 会转写为 __）')
@@ -79,7 +79,7 @@ export const worktreeCommand = new Command('worktree')
         }
 
         // 3. worktree 内补一次外部资源同步：git worktree 只检出仓库内文件，
-        //    tech-specs/biz-tech-docs 是 gitignore 的外部仓库，不会跟随检出——在 worktree 目录内独立 clone/拉取。
+        //    已登记的 tech-specs/biz-tech-docs 是 gitignore 的外部仓库，不会跟随检出——在 worktree 目录内独立 clone/拉取。
         //    失败仅警告不阻塞（开发中可进入 worktree 手动执行 agile sync）。
         await autoSync(target, 'worktree 内同步');
 
@@ -133,8 +133,9 @@ export const worktreeCommand = new Command('worktree')
           return;
         }
         console.log(ui.ok(`worktree 已移除：${path.relative(root, target)}`));
-        const del = await gitTry(root, ['branch', '-D', branch]);
+        // -d（非强制）：分支未合并时 git 拒绝删除并保留——与帮助文案一致，防未合并成果被误删
+        const del = await gitTry(root, ['branch', '-d', branch]);
         if (del.ok) console.log(ui.ok(`分支已删除：${branch}`));
-        else console.log(ui.warn(`分支 ${branch} 未删除（可能未合并）：${del.stderr.split('\n')[0]}`));
+        else console.log(ui.warn(`分支 ${branch} 未合并，已保留（确认不再需要后手动删除：git branch -D ${branch}）`));
       }),
   );

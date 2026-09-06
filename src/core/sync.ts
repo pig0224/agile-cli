@@ -18,10 +18,12 @@ export interface SyncOptions {
   dryRun?: boolean;
 }
 
-/** sync 覆盖的外部仓库槽位：key 与 settings.repos / settings.paths 的键一致 */
+/** sync 覆盖的外部仓库槽位：key 与 settings.repos / settings.paths 的键一致；
+ *  alwaysIgnore = 未登记也写入 .gitignore（tech-specs 为公司级规范、天然外部仓库，
+ *  即使当前 workspace 未登记也不该提交入库；biz-tech-docs 未登记时是 workspace 内普通目录，随仓库入库） */
 const REPO_SLOTS = [
-  { key: 'techSpecs', label: 'tech-specs（公司级规范）', configKey: 'tech-specs' },
-  { key: 'bizTechDocs', label: 'biz-tech-docs（团队知识库）', configKey: 'biz-tech-docs' },
+  { key: 'techSpecs', label: 'tech-specs（公司级规范）', configKey: 'tech-specs', alwaysIgnore: true },
+  { key: 'bizTechDocs', label: 'biz-tech-docs（团队知识库）', configKey: 'biz-tech-docs', alwaysIgnore: false },
 ] as const;
 
 /** 单个外部仓库槽位的收敛：目录缺失 → clone；已有 → fetch + ff-only 快进（dirty 跳过、分叉报人工） */
@@ -88,6 +90,26 @@ async function syncRepoSlot(root: string, settings: Settings, slot: (typeof REPO
   return { name: slot.label, status: 'done', detail: '已同步到远端最新' };
 }
 
+/** workspace 根 .gitignore 是否覆盖该抽屉目录（外部资源不入库的防线；init workspace 按「已登记才忽略」写入，
+ *  后补登记/手改 settings.paths 场景由 sync 自动补写，见 appendGitignore） */
+async function gitignoreCovers(root: string, relDir: string): Promise<boolean> {
+  const gi = await fs.readFile(path.join(root, '.gitignore'), 'utf8').catch(() => '');
+  const target = `${relDir.replace(/\\/g, '/')}/`;
+  return gi.split(/\r?\n/).map((l) => l.trim()).includes(target);
+}
+
+/** 向 workspace 根 .gitignore 幂等追加一行（relDir → `<relDir>/`）；写失败返回 false 交人工 */
+async function appendGitignore(root: string, relDir: string): Promise<boolean> {
+  const giPath = path.join(root, '.gitignore');
+  try {
+    const gi = await fs.readFile(giPath, 'utf8');
+    await fs.writeFile(giPath, `${gi.replace(/\n*$/, '\n')}${relDir.replace(/\\/g, '/')}/\n`, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 模板仓库缓存刷新：fetch + reset 到远端最新；失联降级沿用本地缓存 */
 async function syncTemplates(settings: Settings, dryRun?: boolean): Promise<SyncStep> {
   if (dryRun) return { name: 'templates（模板缓存）', status: 'skipped', detail: '[dry-run] 将刷新模板仓库缓存' };
@@ -105,7 +127,33 @@ async function syncTemplates(settings: Settings, dryRun?: boolean): Promise<Sync
 export async function syncWorkspace(root: string, settings: Settings, opts: SyncOptions = {}): Promise<SyncStep[]> {
   const steps: SyncStep[] = [];
   for (const slot of REPO_SLOTS) {
-    steps.push(await syncRepoSlot(root, settings, slot, opts.dryRun));
+    const step = await syncRepoSlot(root, settings, slot, opts.dryRun);
+    steps.push(step);
+    const registered = Boolean(settings.repos[slot.key]?.url);
+    const covered = await gitignoreCovers(root, settings.paths[slot.key]);
+    // 已登记为外部仓库 → 抽屉目录必须被 .gitignore 忽略（防外部内容入库）；
+    // 缺行自动补写（dry-run 只出计划；写失败降级 warn 交人工）
+    if (registered && !covered) {
+      if (opts.dryRun) {
+        steps.push({ name: slot.label, status: 'skipped', detail: `[dry-run] 将在 .gitignore 追加 ${settings.paths[slot.key]}/（外部仓库内容不入库）` });
+      } else {
+        const ok = await appendGitignore(root, settings.paths[slot.key]);
+        steps.push(
+          ok
+            ? { name: slot.label, status: 'done', detail: `已在 .gitignore 追加 ${settings.paths[slot.key]}/（外部仓库内容不入库）` }
+            : { name: slot.label, status: 'warn', detail: `${settings.paths[slot.key]}/ 未在 workspace 根 .gitignore 忽略且自动补写失败——外部仓库内容可能被提交入库，请手动补该行` },
+        );
+      }
+    }
+    // 未登记且非「始终忽略」槽位 → .gitignore 残留忽略行会让知识库内容不入库，提示人工删行
+    // （登记后该行由本命令维护；tech-specs 未登记也忽略，属预期，不提示）
+    if (!registered && !slot.alwaysIgnore && covered) {
+      steps.push({
+        name: slot.label,
+        status: 'warn',
+        detail: `${settings.paths[slot.key]}/ 在 .gitignore 中但未登记为外部仓库——知识库内容不会随 workspace 仓库入库；若需入库请手动删除该行（登记为外部仓库后该行由 agile sync 维护）`,
+      });
+    }
     if (settings.repos[slot.key]?.ref) {
       steps.push({ name: slot.label, status: 'warn', detail: '声明了版本锁定（ref）——锁定拉取暂未实现，按远端最新拉取' });
     }

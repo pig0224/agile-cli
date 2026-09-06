@@ -9,7 +9,7 @@
 
 **One root, five drawers** — 一个 workspace 根 + 五个抽屉的研发工作区 CLI。
 
-**单仓模式**：整个团队一个 git 仓库（biz-product-docs / projects / process-docs 都是普通目录），跨模块变更一个 PR 天然原子。外部资源（公司级规范 tech-specs、团队知识库 biz-tech-docs、项目模板、Claude 插件）由 `agile sync` 统一拉取，配置集中在 `.agile/settings.json`——**tech-specs / biz-tech-docs 目录不入库**（.gitignore 忽略），各自是独立 git 仓库，本地改动优先（sync 只快进拉取，绝不覆盖本地）。
+**单仓模式**：整个团队一个 git 仓库（biz-product-docs / projects / process-docs / biz-tech-docs 都是普通目录），跨模块变更一个 PR 天然原子。外部资源（公司级规范 tech-specs、团队知识库 biz-tech-docs、项目模板、Claude 插件）由 `agile sync` 统一拉取，配置集中在 `.agile/settings.json`——**tech-specs 恒不入库**（公司级规范，天然外部仓库）；**biz-tech-docs 登记为外部仓库后才不入库**（未登记 = workspace 内普通目录，随仓库提交），已登记目录各自是独立 git 仓库，本地改动优先（sync 只快进拉取，绝不覆盖本地）。
 
 **本仓库只做 CLI（npm 包）**。配套的两个 git 仓库与本 CLI 解耦，扩展它们不需要本仓库发版：
 
@@ -55,11 +55,11 @@ agile plugin install agile
 
 ```
 my-workspace/                    # 单一 git 仓库（团队）
-├── .gitignore                   # 忽略 .worktrees/、tech-specs/、biz-tech-docs/（外部仓库不入库）
+├── .gitignore                   # 忽略 .worktrees/、tech-specs/；biz-tech-docs 登记后由 sync 自动补写
 ├── .agile/
 │   └── settings.json            # 唯一配置：抽屉路径、外部仓库、插件市场与依赖声明、模板源
 ├── tech-specs/                  # 抽屉一：公司级技术规范（独立 git 仓库，不入库）
-├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（默认普通目录；可 config set 登记为外部仓库）
+├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（默认普通目录随仓库入库；config set 登记后由 sync 管理为外部仓库）
 ├── biz-product-docs/            # 抽屉三：产品设计知识库（普通目录）
 ├── projects/                    # 抽屉四：项目代码（普通目录，模板脚手架直接落此）
 └── process-docs/                # 抽屉五：过程产物（STO-xxx 标准任务目录，普通目录）

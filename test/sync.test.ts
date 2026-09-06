@@ -58,6 +58,9 @@ async function makeWorkspace(repos: Settings['repos'] = {}): Promise<string> {
     templates: { registry: templateSource() },
   };
   await fs.writeFile(path.join(dir, '.agile', 'settings.json'), JSON.stringify(settings, null, 2), 'utf8');
+  // 模拟 init workspace：tech-specs 恒忽略（公司级规范、天然外部仓库）；biz-tech-docs 未登记则不忽略
+  // （默认 workspace 内普通目录随仓库入库；登记为外部仓库后由 sync 自动补写忽略行）
+  await fs.writeFile(path.join(dir, '.gitignore'), '.worktrees/\ntech-specs/\n', 'utf8');
   return dir;
 }
 
@@ -159,6 +162,59 @@ describe('syncWorkspace：外部仓库槽位', () => {
     expect(stepOf(steps, 'tech-specs')?.status).toBe('done');
     expect(steps.filter((s) => s.name.startsWith('tech-specs') && s.status === 'warn').length).toBe(1);
     expect(await fs.stat(path.join(dir, 'tech-specs', 'README.md'))).toBeTruthy();
+  });
+
+  it('已登记抽屉未进 .gitignore（如手改 paths）→ 拉取后自动补写忽略行', { timeout: 60_000 }, async () => {
+    const src = makeSource('gitignore', { 'README.md': 'v1\n' });
+    const dir = await makeWorkspace({ techSpecs: { url: src } });
+    // 模拟用户手改 settings.paths.techSpecs 为 specs/，.gitignore 未覆盖 specs/
+    await fs.writeFile(
+      path.join(dir, '.agile', 'settings.json'),
+      JSON.stringify(
+        {
+          version: 1,
+          name: 't',
+          created: '2026-01-01',
+          paths: {
+            techSpecs: 'specs',
+            bizTechDocs: 'biz-tech-docs',
+            bizProductDocs: 'biz-product-docs',
+            projects: 'projects',
+            processDocs: 'process-docs',
+          },
+          repos: { techSpecs: { url: src } },
+          plugins: {},
+          templates: { registry: templateSource() },
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+    const steps = await syncWorkspace(dir, await loadSettings(dir));
+    const fixed = steps.find((s) => s.name.startsWith('tech-specs') && s.status === 'done' && s.detail.includes('.gitignore'));
+    expect(fixed?.detail).toContain('specs/');
+    expect(await fs.readFile(path.join(dir, '.gitignore'), 'utf8')).toContain('specs/');
+  });
+
+  it('biz-tech-docs 未登记但 .gitignore 残留忽略行 → warn 提示（知识库默认随 workspace 入库）', { timeout: 60_000 }, async () => {
+    const dir = await makeWorkspace();
+    // 模拟旧版本 init 写入后未登记的残留行（或登记后又 unset）
+    await fs.appendFile(path.join(dir, '.gitignore'), 'biz-tech-docs/\n', 'utf8');
+    const steps = await syncWorkspace(dir, await loadSettings(dir));
+    const warn = steps.find((s) => s.name.startsWith('biz-tech-docs') && s.status === 'warn');
+    expect(warn?.detail).toContain('未登记');
+    expect(warn?.detail).toContain('入库');
+  });
+
+  it('.gitignore 无法写入（如被同名目录占用）→ 自动补写失败降级 warn 交人工', { timeout: 60_000 }, async () => {
+    const src = makeSource('gi-busy', { 'README.md': 'v1\n' });
+    const dir = await makeWorkspace({ techSpecs: { url: src } });
+    await fs.rm(path.join(dir, '.gitignore'));
+    await fs.mkdir(path.join(dir, '.gitignore'));
+    const steps = await syncWorkspace(dir, await loadSettings(dir));
+    const warn = steps.find((s) => s.name.startsWith('tech-specs') && s.status === 'warn');
+    expect(warn?.detail).toContain('手动补');
   });
 });
 

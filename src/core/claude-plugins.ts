@@ -49,7 +49,8 @@ export async function readInstalledClaudePlugins(claudePluginsDir?: string): Pro
   const parsed = InstalledFileSchema.safeParse(raw);
   if (!parsed.success) return result;
   for (const [pluginId, entries] of Object.entries(parsed.data.plugins ?? {})) {
-    const first = entries[0];
+    // 同 id 多 scope（user/project 等）时优先 user 实况，避免被局部安装的条目误导对照
+    const first = entries.find((e) => e.scope === 'user') ?? entries[0];
     if (!first) continue;
     result.set(pluginId, {
       pluginId,

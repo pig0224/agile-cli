@@ -93,7 +93,7 @@ export async function ensureTemplateRepo(
  * 校验模板仓库一致性（防冲突核心）：
  * 1. name 符合规范且唯一（YAML 重复键由 yaml 解析器直接抛错）
  * 2. path 解析为仓库内已存在目录（禁止绝对路径/越界）
- * 3. 目录 basename === name（一个目录一个身份，杜绝别名指向同一模板）
+ * 3. path 必须为仓库根下与 name 同名的一级目录（一个目录一个身份，杜绝别名与嵌套模板）
  * 4. 同一目录不被多个 name 引用
  */
 export async function validateTemplateRepo(
@@ -118,9 +118,10 @@ export async function validateTemplateRepo(
       issues.push(`模板 ${name} 的目录不存在：${rel}`);
       continue;
     }
-    const base = path.basename(dir);
-    if (base !== name) {
-      issues.push(`模板 ${name} 的目录名 "${base}" 与 name 不一致（必须同名）`);
+    // 一级同名目录：既保证目录名 === name，也拒绝嵌套在另一模板目录内的 path（防别名绕过）
+    const normalized = rel.replace(/^\.\//, '').replace(/\/+$/, '');
+    if (normalized !== name) {
+      issues.push(`模板 ${name} 的 path 必须为仓库根下与 name 同名的一级目录：${entry.path}`);
     }
     const owner = seenDirs.get(dir);
     if (owner) {

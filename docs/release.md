@@ -25,7 +25,7 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 
 ## 1. CI（[.github/workflows/ci.yml](../.github/workflows/ci.yml)）
 
-触发：push 到 main + 所有 PR。
+触发：所有 PR（PR-only 门禁；push main 不触发——`chore(release)` 发版提交经 admin 通道直推 main，其质量由 release.yml 的 validate job 兜底）。
 
 矩阵：ubuntu × Node 24。`pnpm install --frozen-lockfile → typecheck → vitest → build → CLI 冒烟（--version/--help/config --help）`。
 
