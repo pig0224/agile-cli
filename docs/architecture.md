@@ -97,7 +97,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 
 ```
 git init --bare src.git && clone + commit + push      # 准备外部源（tech-specs）
-git init --bare tpl.git && clone + registry.yaml + push  # 准备模板源
+git init --bare tpl.git && clone + registry.yaml + push  # 准备模板源（singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
 agile init workspace --name e2e --tech-specs <src.git>    # settings.json + .gitignore 三行
 agile sync                    # 骨架目录让位 → clone → 检出
 agile sync                    # 幂等：ff-only 无变化
@@ -105,8 +105,11 @@ agile config set biz-tech-docs <src.git> && agile config get biz-tech-docs
 agile config set plugin-repo <src.git> && agile config set template-repo <tpl.git> && agile config get template-repo
 agile config unset plugin-repo && agile config get plugin-repo   # 恢复内置官方源
 agile config list             # settings.json 全量
-agile template list           # 从模板源拉取注册中心
-agile init project order-service --template go-service   # 落 projects/ 普通目录 + git add
+agile template list           # 从模板源拉取注册中心（含组合模板成员名单分组）
+agile init project order-service --template go-service   # 落 projects/go-service + git add
+agile init project admin --template admin-base --member backend=admin-backend   # 组合模板 → 成员平铺 projects/{admin-backend,frontend}/ + 逐成员 git add（<name> 仅为输出标签）
+agile init project admin --template admin-base --member backend=admin-backend   # 组合幂等补缺：已存在成员跳过 + warn（补缺按本次的有效成员目录名，覆盖须带相同 --member）
+agile init project admin --template admin-base   # 撞名跳过路径：若某有效成员目录名已被同名普通项目占用 → 该成员跳过 + warn（人工核对）
 agile worktree create feature/STO-001                    # 前后自动 sync（worktree 内独立 clone）
 agile worktree remove feature/STO-001
 agile plugin install agile && agile plugin ls

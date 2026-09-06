@@ -10,7 +10,12 @@ import {
 } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
 import { git } from '../core/git.js';
-import { loadTemplates, scaffoldFromTemplate, TEMPLATE_NAME_RE } from '../core/template-registry.js';
+import {
+  loadTemplates,
+  scaffoldFromTemplate,
+  scaffoldSolution,
+  TEMPLATE_NAME_RE,
+} from '../core/template-registry.js';
 import { assertProjectName, scaffoldEmptyProject } from '../core/scaffold.js';
 import * as ui from '../ui.js';
 
@@ -19,12 +24,38 @@ const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
   techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n外部 git 仓库（公司规范团队维护），目录不入 workspace 仓库（.gitignore 忽略）：`agile config set tech-specs <git-url>` 登记后 `agile sync` 自动 clone/拉取。\n',
   bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内普通目录，随仓库提交获得版本管理）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`——登记后目录改为 .gitignore 忽略、不入 workspace 仓库（sync 自动补写忽略行），骨架目录自动让位。\n',
   bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
-  projects: '# 抽屉四：团队项目代码\n\n多个项目平铺于此（workspace 仓库内目录）。\n使用 `agile init project <name> [--template <模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板）。\n',
+  projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此（workspace 仓库内目录；组合模板一次生成多个平铺成员项目，成员名与模板名同命名空间、全局唯一）。\n使用 `agile init project <name> [--template <模板或组合模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板与组合模板）。\n',
   processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
 };
 
 async function exists(p: string): Promise<boolean> {
   return fs.stat(p).then(() => true).catch(() => false);
+}
+
+/** --member 收集器（可重复）：只收集原始字符串，格式与冲突校验统一在 action 内做（AgileError 路径） */
+function collectMember(value: string, previous: string[]): string[] {
+  previous.push(value);
+  return previous;
+}
+
+/** 解析 --member 原始串（成员名=目录名）为覆盖表；格式错误 / 重复成员抛中文报错 */
+function parseMemberOverrides(raw: string[]): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  for (const item of raw) {
+    const m = /^([a-z][a-z0-9-]*)=([a-z][a-z0-9-]*)$/.exec(item);
+    if (!m || !m[1] || !m[2]) {
+      throw new AgileError(
+        `--member 格式不合法（须为 成员名=目录名，两端满足 ^[a-z][a-z0-9-]*$）：${item}`,
+      );
+    }
+    const member = m[1];
+    const dir = m[2];
+    if (overrides[member] !== undefined) {
+      throw new AgileError(`--member 重复指定成员：${member}`);
+    }
+    overrides[member] = dir;
+  }
+  return overrides;
 }
 
 /** 产品需求文档（PRD）写作模板——产品在仓库（GitHub Web / VS Code）按此结构写，最低要求：背景/目标/AC ≥ 1 */
@@ -220,10 +251,16 @@ export const initCommand = new Command('init')
   )
   .addCommand(
     new Command('project')
-      .description('初始化项目到 projects/ 下（workspace 单仓内普通目录）：--template 从模板脚手架，缺省为空项目骨架')
-      .argument('<name>', '项目名（将作为 projects/ 下的目录名）')
-      .option('--template <template>', '模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
-      .action(async (name: string, opts: { template?: string }) => {
+      .description('初始化项目到 projects/ 下（workspace 单仓内普通目录）：--template 从模板或组合模板脚手架（组合模板一次生成多个平铺成员项目），缺省为空项目骨架')
+      .argument('<name>', '项目名（作为 projects/ 下的目录名；--template 为组合模板时仅为输出标签，不落目录）')
+      .option('--template <template>', '模板名或组合模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
+      .option(
+        '--member <mapping>',
+        '组合模板成员目录名覆盖（格式：成员名=目录名，可重复；仅 --template 为组合模板时可用）',
+        collectMember,
+        [] as string[],
+      )
+      .action(async (name: string, opts: { template?: string; member: string[] }) => {
         const root = requireWorkspaceRoot();
         // 项目名校验：同时用作 projects/ 目录名与模板 {{name}} 占位（npm name / go module 等），
         // 且杜绝 ../ 路径穿越出 projects/
@@ -231,38 +268,79 @@ export const initCommand = new Command('init')
         const settings = await loadSettings(root);
         const repoPath = `${settings.paths.projects}/${name}`;
         const abs = path.join(root, repoPath);
-        if (await exists(abs)) {
-          throw new AgileError(`目录已存在：${repoPath}`);
-        }
 
         if (opts.template === undefined) {
+          if (opts.member.length > 0) {
+            throw new AgileError('--member 仅在 --template 为组合模板时可用');
+          }
           // 空项目骨架：不依赖模板注册中心（不联网、不读缓存）
+          if (await exists(abs)) {
+            throw new AgileError(`目录已存在：${repoPath}`);
+          }
           await scaffoldEmptyProject(abs, name);
-        } else {
-          if (!TEMPLATE_NAME_RE.test(opts.template)) {
-            throw new AgileError(`模板名不合法（格式 ^[a-z][a-z0-9-]*$）：${opts.template}`);
-          }
-
-          // 1. 加载模板注册中心（源 = settings.json templates.registry；默认走本地缓存）
-          const { registry: tplRegistry, repoDir, issues } = await loadTemplates(settings.templates.registry);
-          if (issues.length > 0) {
-            throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
-          }
-          const entry = tplRegistry.templates[opts.template];
-          if (!entry) {
-            const available = Object.keys(tplRegistry.templates).join('、');
-            throw new AgileError(`模板不存在：${opts.template}。可用模板：${available || '（无）'}`);
-          }
-
-          // 2. 脚手架直接生成到 projects/<name>（workspace 单仓内普通目录）
-          await fs.mkdir(path.dirname(abs), { recursive: true });
-          await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+          await git(root, ['add', repoPath]);
+          console.log(ui.ok(`项目初始化完成：${repoPath}（空项目骨架）`));
+          console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
+          return;
         }
 
-        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit）
-        await git(root, ['add', repoPath]);
+        if (!TEMPLATE_NAME_RE.test(opts.template)) {
+          throw new AgileError(`模板名不合法（格式 ^[a-z][a-z0-9-]*$）：${opts.template}`);
+        }
 
-        console.log(ui.ok(`项目初始化完成：${repoPath}（${opts.template ? `template=${opts.template}` : '空项目骨架'}）`));
+        // 1. 加载模板注册中心（源 = settings.json templates.registry；默认走本地缓存）
+        const { registry: tplRegistry, repoDir, issues } = await loadTemplates(settings.templates.registry);
+        if (issues.length > 0) {
+          throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
+        }
+
+        // 2a. 单模板：平铺生成到 projects/<name>（原有行为不变）
+        if (tplRegistry.templates[opts.template] !== undefined) {
+          if (opts.member.length > 0) {
+            throw new AgileError('--member 仅在 --template 为组合模板时可用');
+          }
+          if (await exists(abs)) {
+            throw new AgileError(`目录已存在：${repoPath}`);
+          }
+          await fs.mkdir(path.dirname(abs), { recursive: true });
+          await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+          await git(root, ['add', repoPath]);
+          console.log(ui.ok(`项目初始化完成：${repoPath}（template=${opts.template}）`));
+          console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
+          return;
+        }
+
+        // 2b. 组合模板：成员项目平铺落盘 projects/<成员目录名>/（成员 = 组合专属模板目录
+        //     solutions/<组合>/<成员>/；{{name}} = 实际目录名；<name> 仅为输出标签，不落目录）
+        const solutionEntry = tplRegistry.solutions[opts.template];
+        if (solutionEntry === undefined) {
+          const templates = Object.keys(tplRegistry.templates).join('、') || '（无）';
+          const solutions = Object.keys(tplRegistry.solutions);
+          throw new AgileError(
+            `模板不存在：${opts.template}。可用模板：${templates}${
+              solutions.length > 0 ? `\n可用组合模板：${solutions.join('、')}` : ''
+            }`,
+          );
+        }
+        const overrides = parseMemberOverrides(opts.member);
+        const result = await scaffoldSolution(
+          repoDir,
+          tplRegistry,
+          opts.template,
+          path.join(root, settings.paths.projects),
+          overrides,
+        );
+
+        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit；逐成员 add 生成的目录）
+        for (const d of result.created) {
+          await git(root, ['add', `${settings.paths.projects}/${d}`]);
+        }
+
+        console.log(ui.ok(`系统 ${name} 初始化完成（template=${opts.template}，成员平铺于 projects/）：`));
+        for (const d of result.created) console.log(ui.ok(`  + ${settings.paths.projects}/${d}`));
+        for (const d of result.skipped) {
+          console.log(ui.warn(`  = 已存在，跳过：${settings.paths.projects}/${d}（若为同名非组合项目请人工核对）`));
+        }
         console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
       }),
   );

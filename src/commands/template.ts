@@ -1,7 +1,12 @@
 import { Command } from 'commander';
 import { DEFAULT_TEMPLATE_REGISTRY, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
-import { cleanAllTemplateCaches, loadTemplates } from '../core/template-registry.js';
+import {
+  cleanAllTemplateCaches,
+  loadTemplates,
+  parseSolutionMembers,
+  type SolutionEntry,
+} from '../core/template-registry.js';
 import * as ui from '../ui.js';
 
 /** 模板源解析：workspace 内读 settings.json 的 templates.registry；workspace 外用内置官方源
@@ -32,6 +37,24 @@ export const templateCommand = new Command('template')
           const tags = [entry.language, entry.framework].filter(Boolean).join(' / ');
           console.log(`  ${ui.info(name.padEnd(18))}${entry.description}${tags ? ui.dim(`（${tags}）`) : ''}`);
         }
+
+        // 组合模板分组（solutions 段；无组合时隐藏）
+        const solutions = Object.entries(registry.solutions) as Array<[string, SolutionEntry]>;
+        if (solutions.length > 0) {
+          console.log('');
+          console.log(ui.bold('组合模板（一次生成多个平铺成员项目）：'));
+          for (const [name, entry] of solutions) {
+            // members 展示容错：非法串在 issues 中报出，这里原样展示
+            let summary = entry.members;
+            try {
+              summary = parseSolutionMembers(entry.members).join('、');
+            } catch {
+              /* 原样展示 */
+            }
+            console.log(`  ${ui.info(name.padEnd(18))}${entry.description}${summary ? ui.dim(`（成员：${summary}）`) : ''}`);
+          }
+        }
+
         if (issues.length > 0) {
           console.log('');
           for (const issue of issues) console.log(ui.warn(issue));
@@ -39,6 +62,7 @@ export const templateCommand = new Command('template')
         }
         console.log('');
         console.log(ui.dim('使用：agile init project <name> --template <模板名>（--template 缺省创建空项目）'));
+        console.log(ui.dim('组合：agile init project <系统标签> --template <组合名> 平铺生成全部成员项目（--member 成员名=目录名 改成员目录名）'));
       }),
   )
   .addCommand(
