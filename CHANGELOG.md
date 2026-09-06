@@ -1,3 +1,16 @@
+## v2.1.0 (2026-09-06)
+
+> bump: minor
+
+### Features
+
+- feat: 注册中心切换 registry.json v2（singles/solutions/projects 全数组、目录由名字派生） ([`b621215`](https://github.com/pig0224/agile-cli/commit/b621215919bd0011aa007c9f6c9c46ae647e33a2))
+- feat: 组合模板 singles/solutions 布局与成员平铺落地 ([`f7910e5`](https://github.com/pig0224/agile-cli/commit/f7910e5071992e39f979f6d9487bc4faf50cba4a))
+
+### Other Changes
+
+- docs: 发版 push 豁免规则入 release 文档（admin-only 直推边界） ([`1f229b7`](https://github.com/pig0224/agile-cli/commit/1f229b7ec6085acd0114119cb9952ddbd9048e5a))
+
 ## v2.0.1 (2026-09-06)
 
 > bump: patch
