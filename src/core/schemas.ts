@@ -28,7 +28,8 @@ export const PluginDependencySchema = z.object({
 });
 
 export const SettingsSchema = z.object({
-  version: z.literal(1),
+  /** 配置格式版本：v1 = 2.0.x 存量（兼容读取，loadSettings 归一为 v2）；v2 = 当前（与 registry.json v2 对齐），写入恒为 2 */
+  version: z.union([z.literal(1), z.literal(2)]),
   name: z.string().min(1),
   created: z.string(),
   paths: PathsSchema,

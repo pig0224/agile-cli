@@ -1,12 +1,7 @@
 import { Command } from 'commander';
 import { DEFAULT_TEMPLATE_REGISTRY, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
-import {
-  cleanAllTemplateCaches,
-  loadTemplates,
-  parseSolutionMembers,
-  type SolutionEntry,
-} from '../core/template-registry.js';
+import { cleanAllTemplateCaches, loadTemplates } from '../core/template-registry.js';
 import * as ui from '../ui.js';
 
 /** 模板源解析：workspace 内读 settings.json 的 templates.registry；workspace 外用内置官方源
@@ -30,28 +25,24 @@ export const templateCommand = new Command('template')
 
         console.log(ui.bold(`模板注册中心：${registryUrl}`));
         console.log('');
-        if (Object.keys(registry.templates).length === 0) {
+        if (registry.singles.length === 0 && registry.solutions.length === 0) {
           console.log(ui.dim('（注册中心为空）'));
         }
-        for (const [name, entry] of Object.entries(registry.templates)) {
-          const tags = [entry.language, entry.framework].filter(Boolean).join(' / ');
-          console.log(`  ${ui.info(name.padEnd(18))}${entry.description}${tags ? ui.dim(`（${tags}）`) : ''}`);
+        // 单例模板：展示顺序 = registry.json singles 数组顺序
+        for (const entry of registry.singles) {
+          const tags = [entry.language?.join(' / '), entry.framework?.join(' / ')]
+            .filter(Boolean)
+            .join(' / ');
+          console.log(`  ${ui.info(entry.name.padEnd(18))}${entry.description}${tags ? ui.dim(`（${tags}）`) : ''}`);
         }
 
-        // 组合模板分组（solutions 段；无组合时隐藏）
-        const solutions = Object.entries(registry.solutions) as Array<[string, SolutionEntry]>;
-        if (solutions.length > 0) {
+        // 组合模板分组（solutions 数组；无组合时隐藏）
+        if (registry.solutions.length > 0) {
           console.log('');
           console.log(ui.bold('组合模板（一次生成多个平铺成员项目）：'));
-          for (const [name, entry] of solutions) {
-            // members 展示容错：非法串在 issues 中报出，这里原样展示
-            let summary = entry.members;
-            try {
-              summary = parseSolutionMembers(entry.members).join('、');
-            } catch {
-              /* 原样展示 */
-            }
-            console.log(`  ${ui.info(name.padEnd(18))}${entry.description}${summary ? ui.dim(`（成员：${summary}）`) : ''}`);
+          for (const solution of registry.solutions) {
+            const summary = solution.projects.map((p) => `${p.name}（${p.description}）`).join('、');
+            console.log(`  ${ui.info(solution.name.padEnd(18))}${solution.description}${summary ? ui.dim(`（成员：${summary}）`) : ''}`);
           }
         }
 

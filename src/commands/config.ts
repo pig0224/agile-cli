@@ -135,7 +135,7 @@ export const configCommand = new Command('config')
           console.log(
             JSON.stringify(
               {
-                version: 1,
+                version: 2,
                 paths: DEFAULT_PATHS,
                 repos: {},
                 plugins: { marketplace: DEFAULT_PLUGIN_MARKETPLACE, dependencies: {} },

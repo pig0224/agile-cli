@@ -28,11 +28,11 @@ workspace/                  # 单一 git 仓库（团队）
 |---|---|---|---|
 | `fcc-agile-cli`（CLI，本仓库） | npm | —（本体） | — |
 | agile-plugins（插件市场） | git 仓库 | 加 `plugins/<name>/` + 登记 marketplace.json | ❌ |
-| agile-templates（模板库） | git 仓库 | 加 `<模板名>/` + 登记 registry.yaml | ❌ |
+| agile-templates（模板库） | git 仓库 | 加 `singles/<模板名>/`（或 `solutions/<组合>/<成员>/`）+ 登记 registry.json | ❌ |
 
 对接点在 **settings.json**（`plugins.marketplace` / `templates.registry`）。
 
-CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplace add <地址>` + `claude plugin install <name>@<市场名>`；使用模板 = clone 模板仓库读 registry.yaml。新增插件/模板对 CLI 完全透明，用户可通过 `agile config set plugin-repo / template-repo` 将两个地址换成团队私有仓库（unset 恢复内置官方源）。
+CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplace add <地址>` + `claude plugin install <name>@<市场名>`；使用模板 = clone 模板仓库读 registry.json（v2：singles / solutions / projects 全数组）。新增插件/模板对 CLI 完全透明，用户可通过 `agile config set plugin-repo / template-repo` 将两个地址换成团队私有仓库（unset 恢复内置官方源）。
 
 ## 3. 分层架构（CLI）
 
@@ -59,7 +59,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "my-workspace",
   "created": "2026-09-05",
   "paths": {
@@ -85,7 +85,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 - `plugins.dependencies` = 插件依赖声明（类 npm package.json）；`agile plugin install/uninstall/update` 与声明联动；安装实况由 Claude Code 全局管理，`agile plugin ls` 输出对照
 - `plugins.marketplace` / `templates.registry` 支持换私有源：`agile config set plugin-repo / template-repo`（unset 恢复内置官方源），也可手改
 
-所有配置经 zod schema 校验（[src/core/schemas.ts](../src/core/schemas.ts)），错误信息带字段路径，中文。旧版三 yaml（workspace/registry/plugin）由 `agile init workspace` 自动迁移。
+所有配置经 zod schema 校验（[src/core/schemas.ts](../src/core/schemas.ts)），错误信息带字段路径，中文。`version` 当前为 2（1 为 2.0.x 存量，读取自动兼容、内存归一为 2）。旧版三 yaml（workspace/registry/plugin）由 `agile init workspace` 自动迁移。
 
 ## 5. 自动同步
 
@@ -97,7 +97,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 
 ```
 git init --bare src.git && clone + commit + push      # 准备外部源（tech-specs）
-git init --bare tpl.git && clone + registry.yaml + push  # 准备模板源（singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
+git init --bare tpl.git && clone + registry.json + push  # 准备模板源（v2：singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
 agile init workspace --name e2e --tech-specs <src.git>    # settings.json + .gitignore 三行
 agile sync                    # 骨架目录让位 → clone → 检出
 agile sync                    # 幂等：ff-only 无变化

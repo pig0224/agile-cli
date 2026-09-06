@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { parseJson } from '../src/core/config.js';
 import {
-  parseSolutionMembers,
   scaffoldFromTemplate,
   scaffoldSolution,
   templateCacheDir,
   validateTemplateRepo,
   TEMPLATE_NAME_RE,
+  TemplateRegistrySchema,
   type TemplateRegistry,
 } from '../src/core/template-registry.js';
 
@@ -27,40 +28,32 @@ async function writePkgPlaceholder(dir: string): Promise<void> {
 }
 
 /**
- * 造一个最小模板仓库（v2 布局）：singles/ 放单例模板，solutions/<组合>/<成员>/ 放组合专属成员模板。
- * - 模板缺省登记 path = ./singles/<name>；legacyRoot = true 时模拟旧布局（无 path，根一级目录）
- * - 组合成员目录按 members 清单物理创建；skipDirs 模拟成员目录缺失，extraDirs 模拟幽灵成员目录
+ * 造一个最小模板仓库（registry.json v2 布局）：singles/<名>/ 放单例模板，solutions/<组合>/<成员>/ 放组合专属成员模板。
+ * - projects 用 Record（成员名 → 描述）书写，按插入序转数组 = registry.json 的数组顺序
+ * - skipDirs 模拟成员目录缺失（登记了但目录不存在），extraDirs 模拟幽灵成员目录（目录在但未登记）
  */
 async function makeRepo(
-  defs: Array<{ name: string; path?: string; dirName?: string; withDir?: boolean; legacyRoot?: boolean }>,
+  defs: Array<{ name: string; withDir?: boolean }>,
   solutions?: Record<
     string,
-    { description?: string; members: string; skipDirs?: string[]; extraDirs?: string[] }
+    { description?: string; projects: Record<string, string>; skipDirs?: string[]; extraDirs?: string[] }
   >,
 ): Promise<{ repoDir: string; registry: TemplateRegistry }> {
   const repoDir = await tmp();
-  const registry: TemplateRegistry = { version: 1, templates: {}, solutions: {} };
+  const registry: TemplateRegistry = { version: 2, singles: [], solutions: [] };
   for (const def of defs) {
-    const rel = def.path ?? (def.legacyRoot ? undefined : `./singles/${def.name}`);
-    registry.templates[def.name] = {
-      description: `${def.name} 模板`,
-      ...(rel ? { path: rel } : {}),
-    };
+    registry.singles.push({ name: def.name, description: `${def.name} 模板` });
     if (def.withDir !== false) {
-      const dirRel = def.dirName ?? (rel ? rel.replace(/^\.\//, '') : def.name);
-      await writePkgPlaceholder(path.join(repoDir, dirRel));
+      await writePkgPlaceholder(path.join(repoDir, 'singles', def.name));
     }
   }
   for (const [name, s] of Object.entries(solutions ?? {})) {
-    registry.solutions[name] = {
+    registry.solutions.push({
+      name,
       description: s.description ?? `${name} 组合`,
-      members: s.members,
-    };
-    const members = s.members
-      .split(',')
-      .map((m) => m.trim())
-      .filter(Boolean);
-    for (const m of members) {
+      projects: Object.entries(s.projects).map(([n, description]) => ({ name: n, description })),
+    });
+    for (const m of Object.keys(s.projects)) {
       if (s.skipDirs?.includes(m)) continue;
       await writePkgPlaceholder(path.join(repoDir, 'solutions', name, m));
     }
@@ -92,57 +85,78 @@ describe('templateCacheDir', () => {
   });
 });
 
+describe('TemplateRegistrySchema（registry.json v2 解析）', () => {
+  const parse = (content: string) => parseJson(content, TemplateRegistrySchema, 'registry.json');
+
+  it('合法 v2 注册中心：singles/solutions 数组，projects 条目与 singles 同形状（language/framework 为字符串数组）', () => {
+    const registry = parse(
+      JSON.stringify({
+        version: 2,
+        singles: [
+          {
+            name: 'vue3-vite',
+            description: 'Vue 3 + Vite + TypeScript 前端项目',
+            language: ['TypeScript'],
+            framework: ['Vue', 'Vite'],
+          },
+        ],
+        solutions: [
+          {
+            name: 'admin-base',
+            description: '通用后台基础系统',
+            projects: [{ name: 'backend', description: '后端服务（Go）' }],
+          },
+        ],
+      }),
+    );
+    expect(registry.version).toBe(2);
+    expect(registry.singles[0]?.language).toEqual(['TypeScript']);
+    expect(registry.singles[0]?.framework).toEqual(['Vue', 'Vite']);
+    expect(registry.solutions[0]?.projects[0]?.description).toBe('后端服务（Go）');
+  });
+
+  it('singles/solutions 可省略（缺省空数组 = 无组合，合法）', () => {
+    const registry = parse('{"version":2}');
+    expect(registry.singles).toEqual([]);
+    expect(registry.solutions).toEqual([]);
+  });
+
+  it('version 非 2 / description 空白 / projects 空数组 / language 空数组 / 非法 JSON → 报错', () => {
+    expect(() => parse('{"version":1}')).toThrow(/校验失败/);
+    expect(() =>
+      parse(JSON.stringify({ version: 2, singles: [{ name: 'a', description: '   ' }] })),
+    ).toThrow(/校验失败/);
+    expect(() =>
+      parse(JSON.stringify({ version: 2, solutions: [{ name: 'x', description: 'd', projects: [] }] })),
+    ).toThrow(/校验失败/);
+    expect(() =>
+      parse(JSON.stringify({ version: 2, singles: [{ name: 'a', description: 'd', language: [] }] })),
+    ).toThrow(/校验失败/);
+    expect(() => parse('{oops')).toThrow(/不是合法的 JSON/);
+  });
+});
+
 describe('validateTemplateRepo', () => {
-  it('合法注册中心（singles/ 布局）无问题', async () => {
-    const { repoDir, registry } = await makeRepo([
-      { name: 'vue3-vite' },
-      { name: 'go-service' },
-    ]);
+  it('合法注册中心（singles 布局）无问题', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }]);
     expect(await validateTemplateRepo(repoDir, registry)).toEqual([]);
   });
 
-  it('旧布局兼容：根一级目录（无 path）合法', async () => {
-    const { repoDir, registry } = await makeRepo([{ name: 'go-service', legacyRoot: true }]);
-    expect(await validateTemplateRepo(repoDir, registry)).toEqual([]);
-  });
-
-  it('拒绝不符合命名规范的模板名', async () => {
+  it('拒绝不符合命名规范的单例模板名', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'Vue_Vite' }]);
     const issues = await validateTemplateRepo(repoDir, registry);
     expect(issues.join('\n')).toContain('Vue_Vite');
     expect(issues.join('\n')).toContain('规范');
   });
 
-  it('path 与 name 不一致 → 报错（一级同名目录）', async () => {
-    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite', path: './vue', dirName: 'vue' }]);
-    const issues = await validateTemplateRepo(repoDir, registry);
-    expect(issues.join('\n')).toContain('一级目录');
+  it('目录缺失（登记了但 singles/<name>/ 不存在）→ 报错', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'ghost', withDir: false }]);
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('不存在');
   });
 
-  it('path 嵌套在另一模板目录内 → 报错（防别名绕过）', async () => {
-    const { repoDir, registry } = await makeRepo([
-      { name: 'vue3-vite' },
-      { name: 'vue3-sub', path: './singles/vue3-vite/sub', dirName: 'singles/vue3-vite/sub' },
-    ]);
-    const issues = await validateTemplateRepo(repoDir, registry);
-    expect(issues.join('\n')).toContain('一级目录');
-  });
-
-  it('两个 name 指向同一目录 → 冲突', async () => {
-    const { repoDir, registry } = await makeRepo([
-      { name: 'vue3-vite' },
-      { name: 'vue3-vite-alias', path: './singles/vue3-vite' },
-    ]);
-    const issues = await validateTemplateRepo(repoDir, registry);
-    expect(issues.join('\n')).toContain('指向同一目录');
-  });
-
-  it('path 越界 / 目录缺失 → 报错', async () => {
-    const escape = await makeRepo([{ name: 'evil', path: '../outside' }]);
-    expect((await validateTemplateRepo(escape.repoDir, escape.registry)).join('\n')).toContain('非法');
-
-    const missing = await makeRepo([{ name: 'ghost', withDir: false }]);
-    expect((await validateTemplateRepo(missing.repoDir, missing.registry)).join('\n')).toContain('不存在');
+  it('singles 数组重复登记 → 报错（数组无键唯一性保证，须显式校验）', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'vue3-vite' }]);
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('重复登记');
   });
 });
 
@@ -172,100 +186,117 @@ describe('scaffoldFromTemplate', () => {
   });
 });
 
-describe('parseSolutionMembers', () => {
-  it('解析合法成员清单（逗号分隔 + 容忍空白 + 保留顺序）', () => {
-    expect(parseSolutionMembers('backend,frontend')).toEqual(['backend', 'frontend']);
-    expect(parseSolutionMembers('frontend, backend')).toEqual(['frontend', 'backend']);
-    expect(parseSolutionMembers('backend')).toEqual(['backend']);
-  });
-
-  it('空串 / 非法格式 / 重复成员名 → 抛错', () => {
-    expect(() => parseSolutionMembers('')).toThrow(/不能为空/);
-    expect(() => parseSolutionMembers('   ')).toThrow(/不能为空/);
-    expect(() => parseSolutionMembers('backend=x')).toThrow(/不合法/);
-    expect(() => parseSolutionMembers('Backend')).toThrow(/不合法/);
-    expect(() => parseSolutionMembers('backend, frontend, backend')).toThrow(/重复/);
-  });
-});
-
 describe('validateTemplateRepo（组合模板）', () => {
   it('合法组合（singles + solutions 布局）无问题', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
-      'admin-base': { members: 'backend,frontend' },
+      'admin-base': { projects: { backend: '后端服务', frontend: '前端应用' } },
     });
     expect(await validateTemplateRepo(repoDir, registry)).toEqual([]);
   });
 
   it('组合名不符合规范 → 报错', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      Admin_Base: { members: 'backend' },
+      Admin_Base: { projects: { backend: '后端服务' } },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('组合模板名');
   });
 
-  it('组合与模板重名 → 报错', async () => {
+  it('组合与单例模板重名 → 报错', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'vue3-vite': { members: 'backend' },
+      'vue3-vite': { projects: { backend: '后端服务' } },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('重名');
   });
 
-  it('两个不同组合名合法共存（重名由 YAML 重复键检测拦截）', async () => {
+  it('solutions 数组重复登记组合 → 报错', async () => {
+    const { repoDir, registry } = await makeRepo([], {
+      'admin-base': { projects: { backend: '后端服务' } },
+    });
+    registry.solutions.push({
+      name: 'admin-base',
+      description: '重复组合',
+      projects: [{ name: 'frontend', description: '前端应用' }],
+    });
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('重复登记');
+  });
+
+  it('两个不同组合名合法共存', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'admin-base': { members: 'backend' },
-      'crm-base': { members: 'frontend' },
+      'admin-base': { projects: { backend: '后端服务' } },
+      'crm-base': { projects: { frontend: '前端应用' } },
     });
     expect(await validateTemplateRepo(repoDir, registry)).toEqual([]);
   });
 
-  it('members 非法格式 → 报错', async () => {
-    const bad = await makeRepo([{ name: 'vue3-vite' }], { 'admin-base': { members: 'Backend=x' } });
-    expect((await validateTemplateRepo(bad.repoDir, bad.registry)).join('\n')).toContain('不合法');
-  });
-
-  it('成员目录缺失（登记了成员但 solutions/<组合>/<成员>/ 不存在）→ 报错', async () => {
+  it('成员项目名不合法 → 报错', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'admin-base': { members: 'backend,frontend', skipDirs: ['backend'] },
+      'admin-base': { projects: { Backend: '后端服务' } },
     });
-    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('成员目录不存在');
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('不合法');
   });
 
-  it('幽灵成员目录（solutions/<组合>/ 下子目录未登记进 members）→ 报错', async () => {
+  it('成员项目目录缺失（登记了成员但 solutions/<组合>/<成员>/ 不存在）→ 报错', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'admin-base': { members: 'backend', extraDirs: ['ghost-member'] },
+      'admin-base': {
+        projects: { backend: '后端服务', frontend: '前端应用' },
+        skipDirs: ['backend'],
+      },
+    });
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('成员项目目录不存在');
+  });
+
+  it('幽灵成员目录（solutions/<组合>/ 下子目录未登记进 projects）→ 报错', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
+      'admin-base': { projects: { backend: '后端服务' }, extraDirs: ['ghost-member'] },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('未登记');
   });
 
-  it('成员名与单例模板名冲突 → 报错（平铺落盘会抢占 projects/ 目录名）', async () => {
+  it('成员项目名与单例模板名冲突 → 报错（平铺落盘会抢占 projects/ 目录名）', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
-      'admin-base': { members: 'backend,go-service' },
+      'admin-base': { projects: { backend: '后端服务', 'go-service': '与模板撞名' } },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('go-service');
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('冲突');
   });
 
-  it('跨组合成员名冲突 → 报错', async () => {
+  it('跨组合成员项目名冲突 → 报错', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'admin-base': { members: 'backend' },
-      'crm-base': { members: 'backend' },
+      'admin-base': { projects: { backend: '后端服务' } },
+      'crm-base': { projects: { backend: '后端服务' } },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('冲突');
   });
 
-  it('成员名与另一组合名冲突 → 报错', async () => {
+  it('成员项目名与另一组合名冲突 → 报错（三段全局唯一，双向校验）', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
-      'admin-base': { members: 'backend' },
-      'crm-base': { members: 'admin-base' },
+      'admin-base': { projects: { backend: '后端服务' } },
+      'crm-base': { projects: { 'admin-base': '与组合撞名' } },
     });
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('冲突');
+
+    // 反方向：组合名与另一组合的成员项目名冲突
+    const rev = await makeRepo([{ name: 'vue3-vite' }], {
+      'admin-base': { projects: { backend: '后端服务' } },
+      backend: { projects: { api: 'API 服务' } },
+    });
+    expect((await validateTemplateRepo(rev.repoDir, rev.registry)).join('\n')).toContain('冲突');
+  });
+
+  it('同组合 projects 数组重复登记成员 → 报错', async () => {
+    const { repoDir, registry } = await makeRepo([], {
+      'admin-base': { projects: { backend: '后端服务' } },
+    });
+    // 手工注入重复成员（Record 键唯一，只能直接构造数组重复）
+    registry.solutions[0]?.projects.push({ name: 'backend', description: '重复成员' });
+    expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('重复登记');
   });
 });
 
 describe('scaffoldSolution', () => {
   function solutionRepo() {
     return makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
-      'admin-base': { members: 'backend,frontend' },
+      'admin-base': { projects: { backend: '后端服务', frontend: '前端应用' } },
     });
   }
 

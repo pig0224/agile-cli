@@ -16,7 +16,7 @@
 | 仓库 | 职责 |
 |---|---|
 | [agile-plugins](https://github.com/pig0224/agile-plugins) | Claude Code 插件市场（SDD/TDD 插件） |
-| [agile-templates](https://github.com/pig0224/agile-templates) | 项目模板注册中心（registry.yaml + 模板目录） |
+| [agile-templates](https://github.com/pig0224/agile-templates) | 项目模板注册中心（registry.json + 模板目录） |
 
 ## 安装
 

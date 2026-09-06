@@ -1,19 +1,17 @@
 import fs from 'node:fs/promises';
-import YAML from 'yaml';
 import { z } from 'zod';
 import { AgileError } from './errors.js';
 import { AGILE_DIR, SETTINGS_FILE } from './paths.js';
 import { SettingsSchema, type Settings } from './schemas.js';
 
-/** 解析 yaml 文本 → zod schema，失败时抛出带文件名的中文错误（模板注册中心 registry.yaml 使用） */
-export function parseYaml<S extends z.ZodType>(content: string, schema: S, file: string): z.output<S> {
+/** 解析 JSON 文本 → zod schema，失败时抛出带文件名的中文错误（模板注册中心 registry.json 使用） */
+export function parseJson<S extends z.ZodType>(content: string, schema: S, file: string): z.output<S> {
   let raw: unknown;
   try {
-    raw = YAML.parse(content);
+    raw = JSON.parse(content);
   } catch (e) {
-    throw new AgileError(`${file} 不是合法的 YAML：${(e as Error).message}`);
+    throw new AgileError(`${file} 不是合法的 JSON：${(e as Error).message}`);
   }
-  if (raw == null) raw = {};
   const result = schema.safeParse(raw);
   if (!result.success) {
     const issues = result.error.issues.map((i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
@@ -44,7 +42,8 @@ export async function loadSettings(root: string): Promise<Settings> {
     const issues = result.error.issues.map((i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
     throw new AgileError(`${AGILE_DIR}/${SETTINGS_FILE} 格式校验失败：\n${issues}`);
   }
-  return result.data;
+  // 配置版本迁移：v1（2.0.x 存量）兼容读取，内存归一为 v2——后续任意写入自然落盘升级
+  return { ...result.data, version: 2 };
 }
 
 export async function saveSettings(root: string, settings: Settings): Promise<void> {

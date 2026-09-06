@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { findWorkspaceRoot, requireWorkspaceRoot } from '../src/core/paths.js';
-import { parseYaml, loadSettings, saveSettings } from '../src/core/config.js';
+import { loadSettings, saveSettings } from '../src/core/config.js';
 import { SettingsSchema } from '../src/core/schemas.js';
 import { AgileError } from '../src/core/errors.js';
 import { assertProjectName, scaffoldEmptyProject } from '../src/core/scaffold.js';
@@ -53,8 +53,10 @@ describe('settings schema', () => {
     expect(good.success).toBe(true);
   });
 
-  it('version 必须为 1', () => {
-    expect(SettingsSchema.safeParse({ ...MINIMAL, version: 2 }).success).toBe(false);
+  it('version 只允许 1（2.0.x 存量）或 2（当前）', () => {
+    expect(SettingsSchema.safeParse({ ...MINIMAL, version: 2 }).success).toBe(true);
+    expect(SettingsSchema.safeParse({ ...MINIMAL, version: 3 }).success).toBe(false);
+    expect(SettingsSchema.safeParse({ ...MINIMAL, version: 9 }).success).toBe(false);
   });
 });
 
@@ -85,8 +87,20 @@ describe('config 读写', () => {
     await expect(loadSettings(invalid)).rejects.toThrow(/格式校验失败/);
   });
 
-  it('parseYaml 保留给模板注册中心（registry.yaml）使用', () => {
-    expect(() => parseYaml('version: [', SettingsSchema, 'registry.yaml')).toThrow(AgileError);
+  it('settings.json version：v1（2.0.x 存量）兼容读取并归一为 v2，v2 原样通过', async () => {
+    const legacy = await tmp();
+    await fs.mkdir(path.join(legacy, '.agile'), { recursive: true });
+    await fs.writeFile(path.join(legacy, '.agile', 'settings.json'), JSON.stringify(MINIMAL), 'utf8');
+    expect((await loadSettings(legacy)).version).toBe(2);
+
+    const current = await tmp();
+    await fs.mkdir(path.join(current, '.agile'), { recursive: true });
+    await fs.writeFile(
+      path.join(current, '.agile', 'settings.json'),
+      JSON.stringify({ ...MINIMAL, version: 2 }),
+      'utf8',
+    );
+    expect((await loadSettings(current)).version).toBe(2);
   });
 });
 

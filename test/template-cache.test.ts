@@ -14,7 +14,7 @@ function makeSource(tag: string): string {
   const g = (cwd: string, cmd: string) => execSync(cmd, { cwd, stdio: 'pipe' });
   g(base, `git init --bare -b main "${bare}"`);
   g(base, `git clone "${bare}" "${src}"`);
-  fsSync.writeFileSync(path.join(src, 'registry.yaml'), 'version: 1\ntemplates: {}\n', 'utf8');
+  fsSync.writeFileSync(path.join(src, 'registry.json'), '{"version":2,"singles":[],"solutions":[]}', 'utf8');
   g(src, 'git add .');
   g(src, 'git -c user.email=t@t -c user.name=t commit -m v1');
   g(src, 'git push origin main');
@@ -24,7 +24,12 @@ function makeSource(tag: string): string {
 function updateSource(bareUrl: string): void {
   const base = path.dirname(bareUrl);
   const src = path.join(base, 'work');
-  fsSync.writeFileSync(path.join(src, 'registry.yaml'), 'version: 1\ntemplates: {}\n# updated\n', 'utf8');
+  // JSON 无注释可占位改动，用追加一条 singles 条目制造上游前进
+  fsSync.writeFileSync(
+    path.join(src, 'registry.json'),
+    '{"version":2,"singles":[{"name":"ghost","description":"上游前进标记"}],"solutions":[]}',
+    'utf8',
+  );
   execSync('git add . && git -c user.email=t@t -c user.name=t commit -m v2 && git push origin main', { cwd: src, stdio: 'pipe' });
 }
 
@@ -62,7 +67,7 @@ describe('ensureTemplateRepo 缓存/刷新语义', () => {
     const r = await ensureTemplateRepo(url, { refresh: true });
     expect(r.stale).toBe(true);
     // 缓存仍可用
-    await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.yaml'), 'utf8')).resolves.toContain('version: 1');
+    await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.json'), 'utf8')).resolves.toContain('"version":2');
   });
 
   it('无缓存且上游不可达 → 报错', { timeout: 60_000 }, async () => {
@@ -79,7 +84,7 @@ describe('模板缓存清理', () => {
     await expect(fs.stat(path.join(templateCacheDir(url), '.git'))).rejects.toThrow();
     expect(await cleanTemplateCache(url)).toBe(false); // 无缓存
     await ensureTemplateRepo(url); // 清理后自动重新克隆
-    await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.yaml'), 'utf8')).resolves.toContain('version: 1');
+    await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.json'), 'utf8')).resolves.toContain('"version":2');
     await cleanTemplateCache(url); // 收尾清理
   });
 

@@ -44,7 +44,8 @@ function updateSource(bare: string, files: Record<string, string>): void {
 process.env.AGILE_TEMPLATE_CACHE_ROOT = fsSync.mkdtempSync(path.join(os.tmpdir(), 'agile-sync-tplcache-'));
 
 let tplUrl: string | undefined;
-const templateSource = () => (tplUrl ??= makeSource('tpl', { 'registry.yaml': 'version: 1\ntemplates: {}\n' }));
+const templateSource = () =>
+  (tplUrl ??= makeSource('tpl', { 'registry.json': '{"version":2,"singles":[],"solutions":[]}' }));
 
 async function makeWorkspace(repos: Settings['repos'] = {}): Promise<string> {
   const dir = await tmp();

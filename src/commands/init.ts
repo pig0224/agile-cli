@@ -111,7 +111,7 @@ async function migrateLegacyConfig(agileDir: string, settingsFile: string): Prom
   const bizTechDocsUrl = repositories[paths.bizTechDocs]?.url;
 
   const settings = {
-    version: 1,
+    version: 2,
     name: raw.name ?? path.basename(process.cwd()),
     created: raw.created ?? new Date().toISOString().slice(0, 10),
     paths,
@@ -163,7 +163,7 @@ export const initCommand = new Command('init')
               console.log(ui.dim('注意：已登记的 tech-specs / biz-tech-docs 现由 agile sync 管理（目录不入库、走 .gitignore）；若此前登记为 submodule，请先人工执行 git submodule deinit --all 再 agile sync。'));
             } else {
               const settings = {
-                version: 1,
+                version: 2,
                 name: opts.name,
                 created: new Date().toISOString().slice(0, 10),
                 paths: { ...DEFAULT_PATHS },
@@ -294,8 +294,8 @@ export const initCommand = new Command('init')
           throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
         }
 
-        // 2a. 单模板：平铺生成到 projects/<name>（原有行为不变）
-        if (tplRegistry.templates[opts.template] !== undefined) {
+        // 2a. 单例模板：平铺生成到 projects/<name>（原有行为不变）
+        if (tplRegistry.singles.some((t) => t.name === opts.template)) {
           if (opts.member.length > 0) {
             throw new AgileError('--member 仅在 --template 为组合模板时可用');
           }
@@ -312,10 +312,10 @@ export const initCommand = new Command('init')
 
         // 2b. 组合模板：成员项目平铺落盘 projects/<成员目录名>/（成员 = 组合专属模板目录
         //     solutions/<组合>/<成员>/；{{name}} = 实际目录名；<name> 仅为输出标签，不落目录）
-        const solutionEntry = tplRegistry.solutions[opts.template];
+        const solutionEntry = tplRegistry.solutions.find((s) => s.name === opts.template);
         if (solutionEntry === undefined) {
-          const templates = Object.keys(tplRegistry.templates).join('、') || '（无）';
-          const solutions = Object.keys(tplRegistry.solutions);
+          const templates = tplRegistry.singles.map((t) => t.name).join('、') || '（无）';
+          const solutions = tplRegistry.solutions.map((s) => s.name);
           throw new AgileError(
             `模板不存在：${opts.template}。可用模板：${templates}${
               solutions.length > 0 ? `\n可用组合模板：${solutions.join('、')}` : ''
