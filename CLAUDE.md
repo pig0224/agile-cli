@@ -41,7 +41,7 @@ E2E 冒烟（真实 git 操作，写入 %TEMP%）：`init workspace --tech-specs
 ```
 src/core/     ★ 纯逻辑层（必须可单测，禁止依赖 commander，不打印）
               paths / schemas(zod) / config / sync / claude-plugins /
-              git / template-registry / scaffold
+              git / template-registry / manifest / scaffold
 src/commands/ 命令层（薄壳：参数解析 → 调 core → 输出）
 scripts/      release.mjs（发版脚本：质量门→CHANGELOG 生成→tag）+ lib/ + build.mjs + extract-release-notes.mjs
 test/         vitest 单测

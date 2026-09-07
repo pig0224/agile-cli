@@ -55,7 +55,7 @@ describe('copyAndSubstitute（模板复制 walker：产物忽略 + 符号链接�
     const [src, dest, external] = [await tmp(), await tmp(), await tmp()];
     await makeTemplate(src, external);
 
-    const notices = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'Order-Service', '{{safeName}}': 'orderservice' });
+    const { notices, files } = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'Order-Service', '{{safeName}}': 'orderservice' });
 
     // 生成物：正常文件齐全且已替换
     expect(await fs.readFile(path.join(dest, 'proj', 'README.md'), 'utf8')).toBe('# Order-Service');
@@ -77,13 +77,20 @@ describe('copyAndSubstitute（模板复制 walker：产物忽略 + 符号链接�
     expect(notices.find((n) => n.path === 'node_modules')?.reason).toBe('artifact');
     expect(notices.find((n) => n.path === 'linked-tpl')?.reason).toBe('symlink');
     expect(notices.find((n) => n.path === 'pnpm-lock.yaml')?.reason).toBe('lockfile');
+    // 已复制文件清单（替换后的落地相对路径，供生成清单记录）
+    expect(files).toEqual([
+      'README.md',
+      'assets/logo.png',
+      'package.json',
+      'src/com/example/orderservice/App.java',
+    ]);
   });
 
   it('keepLockfiles 开关：锁文件恢复复制语义且不产生通知', async () => {
     const [src, dest, external] = [await tmp(), await tmp(), await tmp()];
     await makeTemplate(src, external);
 
-    const notices = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'x' }, { keepLockfiles: true });
+    const { notices } = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'x' }, { keepLockfiles: true });
 
     for (const f of LOCKFILES) {
       expect(await fs.readFile(path.join(dest, 'proj', f), 'utf8')).toBe('lockfile content');
@@ -99,7 +106,7 @@ describe('copyAndSubstitute（模板复制 walker：产物忽略 + 符号链接�
     await fs.mkdir(path.join(src, 'src', 'node_modules', 'dep'), { recursive: true });
     await fs.writeFile(path.join(src, 'src', 'node_modules', 'dep', 'm.js'), 'no', 'utf8');
 
-    const notices = await copyAndSubstitute(src, path.join(dest, 'proj'), {});
+    const { notices } = await copyAndSubstitute(src, path.join(dest, 'proj'), {});
 
     expect(await fs.readFile(path.join(dest, 'proj', 'index.js'), 'utf8')).toBe('ok');
     await expect(fs.stat(path.join(dest, 'proj', 'src', 'node_modules'))).rejects.toThrow();
