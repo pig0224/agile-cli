@@ -1,15 +1,18 @@
 import { Command } from 'commander';
 import { DEFAULT_TEMPLATE_REGISTRY, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings } from '../core/config.js';
-import { cleanAllTemplateCaches, loadTemplates } from '../core/template-registry.js';
+import { cleanAllTemplateCaches, loadTemplates, solutionListRows } from '../core/template-registry.js';
 import * as ui from '../ui.js';
 
 /** 模板源解析：workspace 内读 settings.json 的 templates.registry；workspace 外用内置官方源
- *  （模板缓存位于用户级 ~/.agile/templates，跨 workspace 共享——list / update 属查询能力，无需 workspace） */
-async function resolveRegistryUrl(): Promise<string> {
+ *  （模板缓存位于用户级 ~/.agile/templates，跨 workspace 共享——list / update 属查询能力，无需 workspace）。
+ *  quiet = 机器可读输出（--json）时 suppress 人读提示，防混入 stdout 破坏 JSON */
+async function resolveRegistryUrl(quiet = false): Promise<string> {
   const root = findWorkspaceRoot();
   if (root) return (await loadSettings(root)).templates.registry;
-  console.log(ui.dim('当前不在 agile workspace 内：使用内置官方模板源（换源：agile config set template-repo <git-url>）。'));
+  if (!quiet) {
+    console.log(ui.dim('当前不在 agile workspace 内：使用内置官方模板源（换源：agile config set template-repo <git-url>）。'));
+  }
   return DEFAULT_TEMPLATE_REGISTRY;
 }
 
@@ -18,10 +21,21 @@ export const templateCommand = new Command('template')
   .addCommand(
     new Command('list')
       .description('列出注册中心全部可用模板（默认走本地缓存；agile sync 或 template update 刷新）')
-      .action(async () => {
-        const registryUrl = await resolveRegistryUrl();
+      .option('--json', '以 JSON 输出结构化清单（singles / solutions 数组，含组合成员 name+description），供脚本消费')
+      .action(async (opts: { json?: boolean }) => {
+        const registryUrl = await resolveRegistryUrl(opts.json === true);
         const { registry, issues, stale } = await loadTemplates(registryUrl);
         if (stale) console.log(ui.warn('模板源同步失败，使用本地缓存。'));
+
+        // 机器可读输出：纯 JSON 走 stdout，人读提示（stale/issues）走 stderr
+        if (opts.json) {
+          if (issues.length > 0) {
+            for (const issue of issues) console.error(ui.warn(issue));
+            process.exitCode = 1;
+          }
+          console.log(JSON.stringify(registry, null, 2));
+          return;
+        }
 
         console.log(ui.bold(`模板注册中心：${registryUrl}`));
         console.log('');
@@ -36,13 +50,16 @@ export const templateCommand = new Command('template')
           console.log(`  ${ui.info(entry.name.padEnd(18))}${entry.description}${tags ? ui.dim(`（${tags}）`) : ''}`);
         }
 
-        // 组合模板分组（solutions 数组；无组合时隐藏）
+        // 组合模板分组（solutions 数组；无组合时隐藏）：树形多行展开成员（ASCII 装饰，防 GBK 控制台乱码）
         if (registry.solutions.length > 0) {
           console.log('');
           console.log(ui.bold('组合模板（一次生成多个平铺成员项目）：'));
-          for (const solution of registry.solutions) {
-            const summary = solution.projects.map((p) => `${p.name}（${p.description}）`).join('、');
-            console.log(`  ${ui.info(solution.name.padEnd(18))}${solution.description}${summary ? ui.dim(`（成员：${summary}）`) : ''}`);
+          for (const row of solutionListRows(registry.solutions)) {
+            if (row.kind === 'solution') {
+              console.log(`  ${ui.info(row.name)}${row.description}`);
+            } else {
+              console.log(`    - ${row.name}${ui.dim(row.description)}`);
+            }
           }
         }
 
