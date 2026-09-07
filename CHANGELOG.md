@@ -1,3 +1,11 @@
+## v2.3.0 (2026-09-07)
+
+> bump: minor
+
+### Features
+
+- feat: 组合根耦合资产带出与 /agile:knowledge sync-template 全站同步 (#26) ([`60e0166`](https://github.com/pig0224/agile-cli/commit/60e0166d73d987df173abdc8db7d12665bb6666b))
+
 ## v2.2.0 (2026-09-07)
 
 > bump: minor
