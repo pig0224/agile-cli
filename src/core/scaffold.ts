@@ -28,23 +28,76 @@ const TEXT_EXT = new Set([
   '.mjs', '.css', '.cjs',
 ]);
 
-/** 将模板目录复制到 target，并做 {{name}} / {{safeName}} 占位替换（文本文件与目录名） */
+/** 复制忽略通知：path 相对模板根（统一 / 分隔）；
+ *  reason = artifact（安装/构建产物，整树跳过）| symlink（符号链接/junction，不 follow）| lockfile（锁文件） */
+export interface CopyNotice {
+  path: string;
+  reason: 'artifact' | 'symlink' | 'lockfile';
+}
+
+export interface CopyOptions {
+  /** 保留锁文件的复制语义（默认 false：三种锁文件跳过并通知——模板仓通常不随锁分发） */
+  keepLockfiles?: boolean;
+}
+
+/** 复制时整树/整文件跳过的安装与构建产物（名字精确匹配，目录与文件均适用） */
+export const ARTIFACT_NAMES = new Set([
+  'node_modules', '.git', '.next', 'dist', 'build', 'coverage', '.turbo', '.vitest',
+  '.DS_Store', 'Thumbs.db',
+]);
+
+/** 锁文件：默认跳过（CopyOptions.keepLockfiles 可保留复制语义） */
+const LOCKFILE_NAMES = new Set(['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock']);
+
+/** 将模板目录复制到 target，并做 {{name}} / {{safeName}} 占位替换（文本文件与目录名）。
+ *  忽略安装/构建产物与锁文件；符号链接/junction 一律不 follow、不复制——
+ *  防止把链接目标当文件 readFile（junction 指向目录时抛 EISDIR）或静默复制产物污染生成物。
+ *  返回被忽略条目的通知（每个条目一条，不逐文件展开），由命令层负责输出。 */
 export async function copyAndSubstitute(
   src: string,
   dest: string,
   vars: Record<string, string>,
+  opts: CopyOptions = {},
+): Promise<CopyNotice[]> {
+  const notices: CopyNotice[] = [];
+  await walkCopy(src, dest, vars, opts, '', notices);
+  return notices;
+}
+
+async function walkCopy(
+  src: string,
+  dest: string,
+  vars: Record<string, string>,
+  opts: CopyOptions,
+  rel: string,
+  notices: CopyNotice[],
 ): Promise<void> {
   const entries = await fs.readdir(src, { withFileTypes: true });
   await fs.mkdir(dest, { recursive: true });
   for (const entry of entries) {
     const s = path.join(src, entry.name);
+    // 一律 lstat 复核形态：不 follow 符号链接/junction（readdir 的 Dirent 形态跨平台不可靠）
+    const st = await fs.lstat(s);
+    const relPath = rel ? `${rel}/${entry.name}` : entry.name;
+    if (st.isSymbolicLink()) {
+      notices.push({ path: relPath, reason: 'symlink' });
+      continue;
+    }
+    if (ARTIFACT_NAMES.has(entry.name)) {
+      notices.push({ path: relPath, reason: 'artifact' });
+      continue;
+    }
     // 目录名中的占位符（如 java 模板的 com/example/{{safeName}}）同样替换
     let name = entry.name;
     for (const [k, v] of Object.entries(vars)) name = name.replaceAll(k, v);
     const d = path.join(dest, name);
-    if (entry.isDirectory()) {
-      await copyAndSubstitute(s, d, vars);
-    } else {
+    if (st.isDirectory()) {
+      await walkCopy(s, d, vars, opts, relPath, notices);
+    } else if (st.isFile()) {
+      if (!opts.keepLockfiles && LOCKFILE_NAMES.has(entry.name)) {
+        notices.push({ path: relPath, reason: 'lockfile' });
+        continue;
+      }
       const ext = path.extname(entry.name);
       const isText =
         TEXT_EXT.has(ext) || !ext || entry.name === 'Makefile' || entry.name === '.gitignore';
@@ -55,6 +108,9 @@ export async function copyAndSubstitute(
       } else {
         await fs.copyFile(s, d);
       }
+    } else {
+      // 非 dir/file/symlink 的非常规条目（fifo 等）：跳过并通知，不中断复制
+      notices.push({ path: relPath, reason: 'artifact' });
     }
   }
 }
