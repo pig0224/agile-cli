@@ -2,6 +2,10 @@
 
 > bump: minor
 
+### Breaking Changes
+
+- **项目模板注册中心切换 registry.json v2 布局（singles / solutions 全数组、无 path 字段，目录由名字派生），最低 CLI 版本 2.1.0。** 2.0.x 及更早版本只认 v1 布局（registry.yaml + path 字段），读取 v2 模板源将报「模板仓库 … 缺少 registry.yaml」并退出（exit 1），且模板功能（template list / init project --template）停止可用——遇到该错误请升级：`npm i -g fcc-agile-cli`。init project 空骨架不访问注册中心，不受影响。
+
 ### Features
 
 - feat: 注册中心切换 registry.json v2（singles/solutions/projects 全数组、目录由名字派生） ([`b621215`](https://github.com/pig0224/agile-cli/commit/b621215919bd0011aa007c9f6c9c46ae647e33a2))
