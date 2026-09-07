@@ -15,6 +15,7 @@ import {
   scaffoldFromTemplate,
   scaffoldSolution,
   TEMPLATE_NAME_RE,
+  type ForceSpec,
   type SolutionScaffoldResult,
 } from '../core/template-registry.js';
 import { assertProjectName, scaffoldEmptyProject, type CopyNotice } from '../core/scaffold.js';
@@ -71,6 +72,36 @@ function parseMemberOverrides(raw: string[]): Record<string, string> {
     overrides[member] = dir;
   }
   return overrides;
+}
+
+/** --force 收集器（可重复）。commander 15 对裸标志不走 collector 直接置 true，
+ *  裸标志后再带值时会以 true 作为 previous 传入——两种形态都归一成数组。 */
+function collectForce(
+  value: string | true,
+  previous: Array<string | true> | true | undefined,
+): Array<string | true> {
+  if (previous === true) return [true, value];
+  const base = Array.isArray(previous) ? [...previous] : [];
+  base.push(value);
+  return base;
+}
+
+/** 解析 --force：无值 = 全部已存在成员；--force <成员名> = 重建指定成员（可重复）；两者混用报错 */
+function parseForce(raw: Array<string | true> | string | boolean | undefined): ForceSpec {
+  const list: Array<string | true> =
+    raw === undefined || raw === false
+      ? []
+      : Array.isArray(raw)
+        ? raw
+        : [raw as string | true];
+  const all = list.includes(true);
+  const members = list.filter((v): v is string => v !== true);
+  if (all && members.length > 0) {
+    throw new AgileError(
+      '--force 不能同时无值与指定成员名（--force = 全部已存在成员；--force <成员名> = 重建指定成员，可重复）',
+    );
+  }
+  return { all, members };
 }
 
 /** 产品需求文档（PRD）写作模板——产品在仓库（GitHub Web / VS Code）按此结构写，最低要求：背景/目标/AC ≥ 1 */
@@ -275,11 +306,19 @@ export const initCommand = new Command('init')
         collectMember,
         [] as string[],
       )
-      .action(async (name: string, opts: { template?: string; member: string[] }) => {
+      .option(
+        '--force [member]',
+        '强制重建已存在成员（无值 = 全部已存在成员；--force <成员名> = 指定成员，可重复；仅对有本 CLI 生成清单的目录生效——陌生目录拒绝重建以防误删手写项目）',
+        collectForce,
+        [] as Array<string | true>,
+      )
+      .action(async (name: string, opts: { template?: string; member: string[]; force: Array<string | true> | boolean }) => {
         const root = requireWorkspaceRoot();
         // 项目名校验：同时用作 projects/ 目录名与模板 {{name}} 占位（npm name / go module 等），
         // 且杜绝 ../ 路径穿越出 projects/
         assertProjectName(name);
+        // --force 归一化（commander 15 裸标志直接置 true，不走 collector）并提前校验混用
+        const force = parseForce(opts.force);
         const settings = await loadSettings(root);
         const repoPath = `${settings.paths.projects}/${name}`;
         const abs = path.join(root, repoPath);
@@ -287,6 +326,9 @@ export const initCommand = new Command('init')
         if (opts.template === undefined) {
           if (opts.member.length > 0) {
             throw new AgileError('--member 仅在 --template 为组合模板时可用');
+          }
+          if (force.all || force.members.length > 0) {
+            throw new AgileError('--force 仅在 --template 时可用（空项目骨架无模板可重建）');
           }
           // 空项目骨架：不依赖模板注册中心（不联网、不读缓存）
           if (await exists(abs)) {
@@ -309,18 +351,29 @@ export const initCommand = new Command('init')
           throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
         }
 
-        // 2a. 单例模板：平铺生成到 projects/<name>（原有行为不变）
+        // 2a. 单例模板：平铺生成到 projects/<name>（重跑校验/重建语义在 core，按生成清单判定）
         if (tplRegistry.singles.some((t) => t.name === opts.template)) {
           if (opts.member.length > 0) {
             throw new AgileError('--member 仅在 --template 为组合模板时可用');
           }
-          if (await exists(abs)) {
-            throw new AgileError(`目录已存在：${repoPath}`);
+          if (force.members.length > 0) {
+            throw new AgileError('--force <成员名> 仅组合模板支持；单例模板使用无值 --force');
           }
           await fs.mkdir(path.dirname(abs), { recursive: true });
-          const notices = await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
-          printCopyNotices(notices);
+          const result = await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry, {
+            workspaceRoot: root,
+            force,
+          });
+          printCopyNotices(result.notices);
+          if (result.rebuilt) {
+            console.log(ui.warn(`已强制重建：${repoPath}（原目录内容已按模板重生成）`));
+          }
           await git(root, ['add', repoPath]);
+          // 生成清单入库：成员重跑的完整性校验依赖它，随项目一起走 PR
+          const manifestFile = `.agile/manifests/${name}.json`;
+          if (await exists(path.join(root, manifestFile))) {
+            await git(root, ['add', manifestFile]);
+          }
           console.log(ui.ok(`项目初始化完成：${repoPath}（template=${opts.template}）`));
           console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
           return;
@@ -345,15 +398,23 @@ export const initCommand = new Command('init')
           opts.template,
           path.join(root, settings.paths.projects),
           overrides,
+          { workspaceRoot: root, force },
         );
 
-        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit；逐成员 add 生成的目录）
-        for (const d of result.created) {
+        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit；逐成员 add 生成/重建的目录与对应生成清单）
+        for (const d of [...result.created, ...result.rebuilt]) {
           await git(root, ['add', `${settings.paths.projects}/${d}`]);
+          const manifestFile = `.agile/manifests/${d}.json`;
+          if (await exists(path.join(root, manifestFile))) {
+            await git(root, ['add', manifestFile]);
+          }
         }
 
         console.log(ui.ok(`系统 ${name} 初始化完成（template=${opts.template}，成员平铺于 projects/）：`));
         for (const d of result.created) console.log(ui.ok(`  + ${settings.paths.projects}/${d}`));
+        for (const d of result.rebuilt) {
+          console.log(ui.warn(`  ! 已强制重建：${settings.paths.projects}/${d}（原目录内容已按模板重生成）`));
+        }
         for (const d of result.skipped) {
           console.log(ui.warn(`  = 已存在，跳过：${settings.paths.projects}/${d}（若为同名非组合项目请人工核对）`));
         }
