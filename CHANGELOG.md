@@ -1,3 +1,17 @@
+## v2.2.0 (2026-09-07)
+
+> bump: minor
+
+### Features
+
+- feat: template list 组合段树形多行展开成员（ASCII 装饰防 GBK 乱码）+ --json 结构化输出 (#22) ([`d1eb89e`](https://github.com/pig0224/agile-cli/commit/d1eb89e39f7c0ac492efe25f6fa07cfa64d1a111))
+- feat: init 断点续建防护——生成清单校验、--force 重建护栏与事务性生成 (#21) ([`f2c2e0a`](https://github.com/pig0224/agile-cli/commit/f2c2e0aa366c5abd26df4f16c839268272920a50))
+
+### Fixes
+
+- fix: registry 版本门禁与解析失败升级提示（前向兼容护栏）+ v2.1.0 Breaking 说明 (#23) ([`6b64bb1`](https://github.com/pig0224/agile-cli/commit/6b64bb1718345dccd54bbb78e86507d40b5cc16d))
+- fix: 模板复制忽略安装/构建产物与锁文件 + 符号链接防御（修复直读含产物模板仓 EISDIR 崩溃） (#16) ([`45d5f4d`](https://github.com/pig0224/agile-cli/commit/45d5f4d6111d008bec7d87d1b25f70552029828d))
+
 ## v2.1.0 (2026-09-06)
 
 > bump: minor
