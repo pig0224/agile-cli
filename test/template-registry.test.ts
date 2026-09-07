@@ -6,10 +6,12 @@ import { parseJson } from '../src/core/config.js';
 import {
   scaffoldFromTemplate,
   scaffoldSolution,
+  solutionListRows,
   templateCacheDir,
   validateTemplateRepo,
   TEMPLATE_NAME_RE,
   TemplateRegistrySchema,
+  type SolutionEntry,
   type TemplateRegistry,
 } from '../src/core/template-registry.js';
 import {
@@ -604,5 +606,61 @@ describe('scaffoldFromTemplate 生成清单与 --force（单例模板断点续�
     await expect(
       scaffoldFromTemplate(repoDir, 'Order-Svc', 'java-springboot', target, registry, opts),
     ).rejects.toThrow(/与生成清单不符.*--force/s);
+  });
+});
+
+describe('solutionListRows（template list 组合段行布局：树形多行 + ASCII 装饰）', () => {
+  it('solution 行 padEnd(18)；成员行按段内成员名最大宽对齐；顺序 = projects 数组顺序（不排序）', () => {
+    const solutions: SolutionEntry[] = [
+      {
+        name: 'pig-saas',
+        description: 'SaaS 底座',
+        projects: [
+          { name: 'mock', description: '共享 Mock 接口（Next.js API Routes），中英双语 description 混排 English words' },
+          { name: 'landing', description: '营销站' },
+          { name: 'console', description: '控制台' },
+        ],
+      },
+      {
+        name: 'admin-base',
+        description: '通用后台',
+        projects: [
+          { name: 'backend-admin-service', description: '后端（最长成员名，决定对齐宽）' },
+          { name: 'frontend', description: '前端' },
+        ],
+      },
+    ];
+    const rows = solutionListRows(solutions);
+    // 结构与顺序：solution 行 → 依 projects 数组顺序的成员行，组合之间不重排
+    expect(rows.map((r) => r.kind)).toEqual(['solution', 'member', 'member', 'member', 'solution', 'member', 'member']);
+    // solution 行：padEnd(18)（与单例段同列宽起头）
+    expect(rows[0]).toEqual({ kind: 'solution', name: 'pig-saas'.padEnd(18), description: 'SaaS 底座' });
+    // 成员行对齐宽 = 段内成员名最大长度（backend-admin-service = 21）+ 4 间距；与 description 长度/中英混排无关
+    expect(rows[1]?.name).toBe('mock'.padEnd(25));
+    expect(rows[4]).toEqual({ kind: 'solution', name: 'admin-base'.padEnd(18), description: '通用后台' });
+    expect(rows[5]?.name).toBe('backend-admin-service'.padEnd(25));
+    expect(rows[6]?.name).toBe('frontend'.padEnd(25));
+  });
+
+  it('输出快照（树形多行）：缩进 + ASCII 装饰（无 box-drawing 字符），description 长度不影响列对齐', () => {
+    const pig: SolutionEntry = {
+      name: 'pig-saas',
+      description: 'SaaS 双面应用前端底座：营销站 + 控制台 + 共享 Mock 接口（Next.js，中英双语 SSR）',
+      projects: [
+        { name: 'pig-saas-mock', description: '共享 Mock 接口服务（Next.js API Routes + /themes 主题包目录），可整体移除换真实接口' },
+        { name: 'pig-saas-landing', description: 'SaaS 营销站（Next.js SSR + shadcn/ui + next-intl 双语路径前缀路由）' },
+        { name: 'pig-saas-console', description: 'SaaS 控制台（Next.js SSR + shadcn/ui + next-intl 双语路径前缀路由）' },
+      ],
+    };
+    // 渲染形态 = 命令层着色前的纯文本（缩进/装饰前缀由命令层拼接，此处锁定版式契约）
+    const rendered = solutionListRows([pig]).map((r) =>
+      r.kind === 'solution' ? `  ${r.name}${r.description}` : `    - ${r.name}${r.description}`,
+    );
+    expect(rendered).toEqual([
+      '  pig-saas          SaaS 双面应用前端底座：营销站 + 控制台 + 共享 Mock 接口（Next.js，中英双语 SSR）',
+      '    - pig-saas-mock       共享 Mock 接口服务（Next.js API Routes + /themes 主题包目录），可整体移除换真实接口',
+      '    - pig-saas-landing    SaaS 营销站（Next.js SSR + shadcn/ui + next-intl 双语路径前缀路由）',
+      '    - pig-saas-console    SaaS 控制台（Next.js SSR + shadcn/ui + next-intl 双语路径前缀路由）',
+    ]);
   });
 });

@@ -54,6 +54,32 @@ export type SingleEntry = z.infer<typeof SingleEntrySchema>;
 export type SolutionEntry = z.infer<typeof SolutionEntrySchema>;
 export type TemplateRegistry = z.infer<typeof TemplateRegistrySchema>;
 
+/** template list 组合段的展示行（core 返回结构化数据；缩进/装饰前缀与着色由命令层拼接） */
+export interface SolutionListRow {
+  kind: 'solution' | 'member';
+  /** 已按列宽 padEnd 的纯文本名（solution 行 = 18 列与单例段同宽起头；member 行 = 段内成员名最大宽 + 4 间距） */
+  name: string;
+  description: string;
+}
+
+/**
+ * 组合段行布局：每个组合展开为一行 solution + 依 projects 数组顺序的成员行（= 生成顺序，不排序）。
+ * 成员行对齐宽 = 段内全部成员名的最大长度 + 4 间距（对齐只看 name 段，不受 description 长度/中英混排影响）；
+ * 装饰一律 ASCII（命令层用 "    - " 前缀），不用 box-drawing 字符（Windows GBK 控制台会乱码）。
+ */
+export function solutionListRows(solutions: SolutionEntry[]): SolutionListRow[] {
+  const width =
+    Math.max(0, ...solutions.flatMap((s) => s.projects.map((p) => p.name.length))) + 4;
+  const rows: SolutionListRow[] = [];
+  for (const s of solutions) {
+    rows.push({ kind: 'solution', name: s.name.padEnd(18), description: s.description });
+    for (const p of s.projects) {
+      rows.push({ kind: 'member', name: p.name.padEnd(width), description: p.description });
+    }
+  }
+  return rows;
+}
+
 export interface LoadedTemplates {
   registry: TemplateRegistry;
   repoDir: string;
