@@ -15,9 +15,24 @@ import {
   scaffoldFromTemplate,
   scaffoldSolution,
   TEMPLATE_NAME_RE,
+  type SolutionScaffoldResult,
 } from '../core/template-registry.js';
-import { assertProjectName, scaffoldEmptyProject } from '../core/scaffold.js';
+import { assertProjectName, scaffoldEmptyProject, type CopyNotice } from '../core/scaffold.js';
 import * as ui from '../ui.js';
+
+/** 模板复制忽略通知的说明文字（reason → 中文标签） */
+const NOTICE_LABELS: Record<CopyNotice['reason'], string> = {
+  artifact: '安装/构建产物',
+  symlink: '符号链接/junction，不随模板复制',
+  lockfile: '锁文件',
+};
+
+/** 输出模板复制忽略通知（core 不打印；ui.warn 自带 ⚠ 前缀，此处不再加） */
+function printCopyNotices(notices: CopyNotice[]): void {
+  for (const n of notices) {
+    console.log(ui.warn(`已忽略模板产物：${n.path}（${NOTICE_LABELS[n.reason]}）`));
+  }
+}
 
 /** 抽屉骨架说明（README 放进各抽屉；key 与 settings.paths 的键一致） */
 const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
@@ -303,7 +318,8 @@ export const initCommand = new Command('init')
             throw new AgileError(`目录已存在：${repoPath}`);
           }
           await fs.mkdir(path.dirname(abs), { recursive: true });
-          await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+          const notices = await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry);
+          printCopyNotices(notices);
           await git(root, ['add', repoPath]);
           console.log(ui.ok(`项目初始化完成：${repoPath}（template=${opts.template}）`));
           console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
@@ -323,7 +339,7 @@ export const initCommand = new Command('init')
           );
         }
         const overrides = parseMemberOverrides(opts.member);
-        const result = await scaffoldSolution(
+        const result: SolutionScaffoldResult = await scaffoldSolution(
           repoDir,
           tplRegistry,
           opts.template,
@@ -341,6 +357,7 @@ export const initCommand = new Command('init')
         for (const d of result.skipped) {
           console.log(ui.warn(`  = 已存在，跳过：${settings.paths.projects}/${d}（若为同名非组合项目请人工核对）`));
         }
+        printCopyNotices(result.notices);
         console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
       }),
   );

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { git, gitTry } from './git.js';
 import { AgileError } from './errors.js';
 import { parseJson } from './config.js';
-import { PROJECT_NAME_RE, copyAndSubstitute, safePackageSegment } from './scaffold.js';
+import { PROJECT_NAME_RE, copyAndSubstitute, safePackageSegment, type CopyNotice } from './scaffold.js';
 import { templateCacheRoot } from './paths.js';
 
 /** 名字规范（单例模板名/组合名/成员项目名通用）：小写字母开头，仅小写字母/数字/连字符（防冲突的第一道防线） */
@@ -279,14 +279,15 @@ export async function cleanAllTemplateCaches(): Promise<number> {
   return cleaned;
 }
 
-/** 从单例模板生成项目骨架到 target（占位符替换）；模板目录 = singles/<模板名>/（约定派生，无 path 字段） */
+/** 从单例模板生成项目骨架到 target（占位符替换）；模板目录 = singles/<模板名>/（约定派生，无 path 字段）。
+ *  返回复制忽略通知（产物/符号链接/锁文件），由命令层负责输出。 */
 export async function scaffoldFromTemplate(
   repoDir: string,
   name: string,
   templateName: string,
   target: string,
   registry: TemplateRegistry,
-): Promise<void> {
+): Promise<CopyNotice[]> {
   if (!registry.singles.some((t) => t.name === templateName)) {
     throw new AgileError(`模板不存在：${templateName}（agile template list 查看可用模板）`);
   }
@@ -294,7 +295,7 @@ export async function scaffoldFromTemplate(
     throw new AgileError(`模板名不合法：${templateName}`);
   }
   const src = path.join(repoDir, 'singles', templateName);
-  await copyAndSubstitute(src, target, {
+  return copyAndSubstitute(src, target, {
     '{{name}}': name,
     '{{safeName}}': safePackageSegment(name),
   });
@@ -306,6 +307,8 @@ export interface SolutionScaffoldResult {
   created: string[];
   /** 已存在而跳过的成员目录名（补缺语义：组合定义演进后再次 init 只补缺失成员） */
   skipped: string[];
+  /** 复制忽略通知（path 带 <成员目录名>/ 前缀，跨成员聚合），由命令层负责输出 */
+  notices: CopyNotice[];
 }
 
 /**
@@ -354,6 +357,7 @@ export async function scaffoldSolution(
 
   const created: string[] = [];
   const skipped: string[] = [];
+  const notices: CopyNotice[] = [];
   for (const project of solution.projects) {
     const dir = effective.get(project.name)!;
     const target = path.join(projectsRoot, dir);
@@ -369,12 +373,14 @@ export async function scaffoldSolution(
         `组合模板 ${solutionName} 的成员目录不存在：solutions/${solutionName}/${project.name}/`,
       );
     }
-    await copyAndSubstitute(src, target, {
+    const memberNotices = await copyAndSubstitute(src, target, {
       '{{name}}': dir,
       '{{safeName}}': safePackageSegment(dir),
     });
+    // 通知 path 加成员目录前缀（组合平铺生成，warn 需定位到成员）
+    for (const n of memberNotices) notices.push({ ...n, path: `${dir}/${n.path}` });
     created.push(dir);
   }
 
-  return { created, skipped };
+  return { created, skipped, notices };
 }
