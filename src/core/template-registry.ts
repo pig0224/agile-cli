@@ -150,7 +150,8 @@ export async function ensureTemplateRepo(
  * 2. 登记唯一：singles / solutions / 同组合 projects 数组内 name 不得重复（JSON 数组无键唯一性保证，须显式校验）
  * 3. 目录存在：单例 = singles/<name>/，成员项目 = solutions/<组合>/<name>/（组合专属完整模板骨架）
  * 4. 三段全局唯一：模板名/组合名/成员项目名互不重名——init 后全部平铺落盘 projects/，同一命名空间
- * 5. 双向一致：solutions/<组合>/ 下子目录必须全部登记进该组合的 projects（防幽灵成员目录）
+ * 5. 双向一致：solutions/<组合>/ 下子目录必须全部登记进该组合的 projects（防幽灵成员目录）；
+ *    docs/ 豁免（组合根耦合资产目录：CLAUDE.md + docs/ 归总跨成员约定与规范，init 时带出到 .agile/solutions/<组合>/）
  */
 export async function validateTemplateRepo(
   repoDir: string,
@@ -247,11 +248,12 @@ export async function validateTemplateRepo(
       }
     }
 
-    // 反向一致性：solutions/<组合>/ 下的子目录必须全部登记进 projects（防幽灵成员目录）
+    // 反向一致性：solutions/<组合>/ 下的子目录必须全部登记进 projects（防幽灵成员目录）；
+    // docs/ 豁免——组合根耦合资产目录（CLAUDE.md + docs/ 归总跨成员约定与规范），不是成员项目
     const solDir = path.join(repoDir, 'solutions', solution.name);
     if (await isDir(solDir)) {
       for (const ent of await fs.readdir(solDir, { withFileTypes: true })) {
-        if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+        if (!ent.isDirectory() || ent.name.startsWith('.') || ent.name === 'docs') continue;
         if (!declared.has(ent.name)) {
           issues.push(
             `目录 solutions/${solution.name}/${ent.name}/ 未登记进组合 ${solution.name} 的 projects（登记与成员目录须双向一致）`,
@@ -509,6 +511,65 @@ export interface SolutionScaffoldResult {
   rebuilt: string[];
   /** 复制忽略通知（path 带 <成员目录名>/ 前缀，跨成员聚合），由命令层负责输出 */
   notices: CopyNotice[];
+  /** 组合根耦合资产带出结果；null = 未启用清单能力（无 workspaceRoot）。
+   *  present = 模板组合根是否带有耦合资产（CLAUDE.md 或 docs/）；copied = 本次是否实际复制（快照已存在则 false）。 */
+  comboAssets: { present: boolean; copied: boolean; files: number } | null;
+}
+
+/**
+ * 组合根耦合资产带出：把 solutions/<组合>/CLAUDE.md 与 docs/（归总的跨成员约定与规范）复制到
+ * workspace 的 .agile/solutions/<组合>/，供 /agile:knowledge 按资产类型同步到
+ * biz-tech-docs / biz-product-docs。组合平铺生成不落系统目录，workspace 需要一份可定位的耦合资产快照。
+ * 快照语义：目标已存在则整体跳过不覆盖（补缺/重跑不冲掉人工改动，含知识同步后的本地演进）；
+ * 无耦合资产的组合（旧版模板）静默跳过。vars 为空 = 不做 {{name}} 占位替换（组合级资产与具体落盘目录名无关）。
+ * 复制中途失败清除目标目录（调用方的事务回滚随后回滚成员，不留残缺）。
+ */
+async function syncComboAssets(
+  repoDir: string,
+  solutionName: string,
+  workspaceRoot: string,
+): Promise<{ present: boolean; copied: boolean; files: number; notices: CopyNotice[] }> {
+  const solDir = path.join(repoDir, 'solutions', solutionName);
+  const dest = path.join(workspaceRoot, '.agile', 'solutions', solutionName);
+  const lstat = (p: string) => fs.lstat(p).catch(() => null);
+
+  // 只认组合根的 CLAUDE.md 与 docs/ 两个路径；符号链接一律不复制并通知（与成员复制同语义）
+  const notices: CopyNotice[] = [];
+  const pieces: Array<{ kind: 'file' | 'dir'; src: string; dest: string; rel: string }> = [];
+  const cm = await lstat(path.join(solDir, 'CLAUDE.md'));
+  if (cm?.isSymbolicLink()) {
+    notices.push({ path: `solutions/${solutionName}/CLAUDE.md`, reason: 'symlink' });
+  } else if (cm?.isFile()) {
+    pieces.push({ kind: 'file', src: path.join(solDir, 'CLAUDE.md'), dest: path.join(dest, 'CLAUDE.md'), rel: `solutions/${solutionName}/CLAUDE.md` });
+  }
+  const docs = await lstat(path.join(solDir, 'docs'));
+  if (docs?.isSymbolicLink()) {
+    notices.push({ path: `solutions/${solutionName}/docs/`, reason: 'symlink' });
+  } else if (docs?.isDirectory()) {
+    pieces.push({ kind: 'dir', src: path.join(solDir, 'docs'), dest: path.join(dest, 'docs'), rel: `solutions/${solutionName}/docs/` });
+  }
+  if (pieces.length === 0) return { present: notices.length > 0, copied: false, files: 0, notices };
+  if (await lstat(dest)) return { present: true, copied: false, files: 0, notices }; // 快照已存在：跳过不覆盖
+
+  let files = 0;
+  await fs.mkdir(dest, { recursive: true });
+  try {
+    for (const p of pieces) {
+      if (p.kind === 'file') {
+        // CLAUDE.md 单文件直复制（copyAndSubstitute 只收目录）
+        await fs.copyFile(p.src, p.dest);
+        files++;
+      } else {
+        const r = await copyAndSubstitute(p.src, p.dest, {});
+        files += r.files.length;
+        for (const n of r.notices) notices.push({ ...n, path: `${p.rel}${n.path}` });
+      }
+    }
+  } catch (e) {
+    await fs.rm(dest, { recursive: true, force: true }).catch(() => {});
+    throw e;
+  }
+  return { present: true, copied: true, files, notices };
 }
 
 /**
@@ -519,6 +580,7 @@ export interface SolutionScaffoldResult {
  * 已存在的成员目录：有本 CLI 生成清单 → 完整性校验（一致跳过 + warn；不符硬错误，--force 可重建）、
  * 无清单（陌生目录，含用户手写项目）→ 跳过 + warn（向后兼容，--force 拒绝重建防误删）。
  * 生成走同卷临时目录 + 原子替换；任一成员失败回滚本次运行新建的成员，不留残缺。
+ * 全部成员成功后把组合根耦合资产（CLAUDE.md + docs/）快照到 .agile/solutions/<组合名>/（带出失败随整体回滚）。
  * init project 的 <name> 仅为输出标签，不落任何目录。
  */
 export async function scaffoldSolution(
@@ -586,6 +648,7 @@ export async function scaffoldSolution(
   const rebuilt: string[] = [];
   const notices: CopyNotice[] = [];
   const createdThisRun: string[] = []; // 回滚登记：仅本次运行替换落盘的成员
+  let comboAssets: SolutionScaffoldResult['comboAssets'] = null;
   try {
     for (const project of solution.projects) {
       const dir = effective.get(project.name)!;
@@ -636,6 +699,13 @@ export async function scaffoldSolution(
       if (rebuild) rebuilt.push(dir);
       else created.push(dir);
     }
+
+    // 组合根耦合资产带出（全部成员成功后；失败抛错随上面的回滚一起不留残缺）
+    if (opts.workspaceRoot) {
+      const combo = await syncComboAssets(repoDir, solutionName, opts.workspaceRoot);
+      comboAssets = { present: combo.present, copied: combo.copied, files: combo.files };
+      for (const n of combo.notices) notices.push(n);
+    }
   } catch (e) {
     // 事务回滚：本次运行新建/重建的成员连同清单一并移除，之前已存在被跳过的不动，不留残缺
     for (const d of createdThisRun) {
@@ -645,5 +715,5 @@ export async function scaffoldSolution(
     throw e;
   }
 
-  return { created, skipped, rebuilt, notices };
+  return { created, skipped, rebuilt, notices, comboAssets };
 }

@@ -409,6 +409,10 @@ export const initCommand = new Command('init')
             await git(root, ['add', manifestFile]);
           }
         }
+        // 组合根耦合资产快照随成员一起入库（知识同步的源，与生成清单同为 workspace 版本管理资产）
+        if (result.comboAssets?.copied && result.comboAssets.files > 0) {
+          await git(root, ['add', `.agile/solutions/${opts.template}`]);
+        }
 
         console.log(ui.ok(`系统 ${name} 初始化完成（template=${opts.template}，成员平铺于 projects/）：`));
         for (const d of result.created) console.log(ui.ok(`  + ${settings.paths.projects}/${d}`));
@@ -418,7 +422,15 @@ export const initCommand = new Command('init')
         for (const d of result.skipped) {
           console.log(ui.warn(`  = 已存在，跳过：${settings.paths.projects}/${d}（若为同名非组合项目请人工核对）`));
         }
+        if (result.comboAssets?.copied && result.comboAssets.files > 0) {
+          console.log(ui.ok(`  + .agile/solutions/${opts.template}（组合根耦合资产，${result.comboAssets.files} 文件）`));
+        } else if (result.comboAssets?.present) {
+          console.log(ui.dim(`  = 组合耦合资产快照已存在：.agile/solutions/${opts.template}（跳过，不覆盖）`));
+        }
         printCopyNotices(result.notices);
+        if (result.comboAssets?.present) {
+          console.log(ui.dim(`组合耦合约定与规范在 .agile/solutions/${opts.template}/（CLAUDE.md + docs/）：可用 /agile:knowledge 按资产类型同步到 biz-tech-docs / biz-product-docs。`));
+        }
         console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
       }),
   );
