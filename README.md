@@ -69,15 +69,16 @@ my-workspace/                    # 单一 git 仓库（团队）
 
 | 命令 | 说明 |
 |---|---|
-| `agile init workspace [--tech-specs <url>] [--biz-tech-docs <url>]` | 初始化工作区（settings.json + 五抽屉 + git init；旧版三 yaml 自动迁移） |
-| `agile init project <name> [--template <t>]` | 创建项目到 projects/（--template 从模板生成，缺省为空项目骨架；普通目录，git add） |
+| `agile init workspace [--name <名>] [--tech-specs <url>] [--biz-tech-docs <url>] [--marketplace <url>] [--template-registry <url>]` | 初始化工作区（settings.json + 五抽屉 + git init；旧版三 yaml 自动迁移；--name 自定义 workspace 名称，缺省取目录名） |
+| `agile init project <name> [--template <t>] [--member <成员名>=<目录名>] [--force]` | 创建项目到 projects/（--template 从模板/组合模板生成，缺省为空项目骨架；组合模板 --member 覆盖成员目录名、--force 重建已存在成员——仅对有生成清单的目录生效；普通目录，git add） |
 | `agile sync [--dry-run]` | 拉取四类外部资源：tech-specs / biz-tech-docs 仓库（clone 或快进，本地优先）+ 模板缓存刷新 + 插件按声明安装（绝不卸载） |
 | `agile config get/set/unset <tech-specs\|biz-tech-docs\|plugin-repo\|template-repo>` | 快捷配置外部仓库与插件/模板源地址（类 npm registry 换源体验；plugin-repo/template-repo 的 unset 恢复内置官方源） |
 | `agile config list` | 查看全部配置（settings.json） |
 | `agile worktree create/list/remove` | workspace 根仓库 worktree（create 前后自动 sync；--help 有参数详述） |
-| `agile template list/update/clean` | 模板注册中心：查看 / 刷新缓存 / 清理缓存（源 = settings.json templates.registry） |
+| `agile template list/update/clean` | 模板注册中心：查看（`list --json` JSON 输出）/ 刷新缓存 / 清理缓存（源 = settings.json templates.registry） |
 | `agile plugin install/uninstall/update/ls` | 插件管理（类 npm：install/uninstall 同时维护 settings.json 依赖声明；update 刷新市场并强制重装；ls 声明 × 实况对照） |
 | `agile update` | CLI 自更新（npm） |
+| `agile version` | 查看当前 CLI 版本（同 `--version`） |
 
 > 私有源：`agile config set plugin-repo <git-url>` / `agile config set template-repo <git-url>` 一键切换内网镜像（落点 settings.json 的 `plugins.marketplace` / `templates.registry`，也可手改；`config unset` 恢复内置官方源）。
 

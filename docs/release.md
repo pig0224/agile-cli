@@ -51,5 +51,5 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 ## 4. 发版 checklist
 
 - [x] GitHub 仓库创建、代码推送、`NPM_TOKEN` secret 配置、默认地址替换
-- [x] v1.0.0 / v1.1.0 已发布
+- [x] v1.0.0 ~ v2.2.0 已发布（最新 v2.2.0）
 - [ ] 后续发版：`npm run release` → release.yml validate/publish 全绿 → 验证 npm 版本与文档站

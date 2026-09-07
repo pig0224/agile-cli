@@ -26,7 +26,7 @@
 
 ```bash
 pnpm install
-pnpm build          # tsc → dist/
+pnpm build          # esbuild 单文件打包 → dist/index.js
 pnpm test           # vitest（test/）
 pnpm typecheck
 node dist/index.js --help
