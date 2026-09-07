@@ -1,3 +1,11 @@
+## v2.4.0 (2026-09-07)
+
+> bump: major
+
+### Breaking Changes
+
+- feat!: init project 接口重设计——目录命名统一用 --name ([`7677649`](https://github.com/pig0224/agile-cli/commit/7677649c5f9021a7ac58b92f5d73e61170fa92bd))
+
 ## v2.3.0 (2026-09-07)
 
 > bump: minor
