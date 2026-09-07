@@ -309,6 +309,17 @@ describe('validateTemplateRepo（组合模板）', () => {
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('未登记');
   });
 
+  it('组合根 docs/（耦合资产目录）+ CLAUDE.md 不算幽灵成员——反向一致校验豁免', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }], {
+      'admin-base': { projects: { backend: '后端服务' } },
+    });
+    const docsDir = path.join(repoDir, 'solutions', 'admin-base', 'docs');
+    await fs.mkdir(docsDir, { recursive: true });
+    await fs.writeFile(path.join(docsDir, 'api-conventions.md'), '# API 约定', 'utf8');
+    await fs.writeFile(path.join(repoDir, 'solutions', 'admin-base', 'CLAUDE.md'), '# 组合导航', 'utf8');
+    expect(await validateTemplateRepo(repoDir, registry)).toEqual([]);
+  });
+
   it('成员项目名与单例模板名冲突 → 报错（平铺落盘会抢占 projects/ 目录名）', async () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
       'admin-base': { projects: { backend: '后端服务', 'go-service': '与模板撞名' } },
@@ -578,6 +589,97 @@ describe('scaffoldSolution 生成清单与 --force（断点续建防护）', () 
     const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot);
     expect(result.created).toEqual(['backend', 'frontend']);
     await expect(fs.stat(path.join(ws, '.agile'))).rejects.toThrow();
+  });
+});
+
+describe('scaffoldSolution 组合根耦合资产带出（.agile/solutions/<组合>/）', () => {
+  function solutionRepo() {
+    return makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
+      'admin-base': { projects: { backend: '后端服务', frontend: '前端应用' } },
+    });
+  }
+
+  /** 给组合根写耦合资产：CLAUDE.md + docs/（tech/product 各一篇，frontmatter 类型决定知识同步去向） */
+  async function writeComboAssets(repoDir: string): Promise<void> {
+    const docsDir = path.join(repoDir, 'solutions', 'admin-base', 'docs');
+    await fs.mkdir(docsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(repoDir, 'solutions', 'admin-base', 'CLAUDE.md'),
+      '# admin-base 组合导航\n\n成员：backend / frontend。耦合约定见 docs/。\n',
+      'utf8',
+    );
+    await fs.writeFile(path.join(docsDir, 'api-conventions.md'), '---\n类型: tech\n---\n\n# API 约定\n', 'utf8');
+    await fs.writeFile(path.join(docsDir, 'ui-spec.md'), '---\n类型: product\n---\n\n# UI 规范\n', 'utf8');
+  }
+
+  async function workspace() {
+    const ws = await tmp();
+    return { ws, projectsRoot: path.join(ws, 'projects') };
+  }
+
+  it('首次生成带出到 .agile/solutions/<组合>/（CLAUDE.md + docs/，不替换占位符，不混入成员目录）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    await writeComboAssets(repoDir);
+    const { ws, projectsRoot } = await workspace();
+
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+
+    expect(result.comboAssets).toEqual({ present: true, copied: true, files: 3 });
+    const cm = await fs.readFile(path.join(ws, '.agile', 'solutions', 'admin-base', 'CLAUDE.md'), 'utf8');
+    expect(cm).toContain('admin-base 组合导航');
+    const tech = await fs.readFile(
+      path.join(ws, '.agile', 'solutions', 'admin-base', 'docs', 'api-conventions.md'),
+      'utf8',
+    );
+    expect(tech).toContain('类型: tech');
+    // 快照只含组合根两个耦合路径，成员目录不混入
+    expect(await fs.readdir(path.join(ws, '.agile', 'solutions', 'admin-base'))).toEqual(['CLAUDE.md', 'docs']);
+  });
+
+  it('重跑（补缺）快照已存在 → present=true / copied=false，人工改动不被覆盖', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    await writeComboAssets(repoDir);
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+
+    const manual = path.join(ws, '.agile', 'solutions', 'admin-base', 'docs', 'api-conventions.md');
+    await fs.writeFile(manual, '---\n类型: tech\n---\n\n# 本地演进版\n', 'utf8');
+
+    const second = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    expect(second.comboAssets).toEqual({ present: true, copied: false, files: 0 });
+    expect(await fs.readFile(manual, 'utf8')).toContain('本地演进版');
+  });
+
+  it('无耦合资产的组合（旧版模板）→ present=false，不创建 .agile/solutions', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+
+    expect(result.comboAssets).toEqual({ present: false, copied: false, files: 0 });
+    await expect(fs.stat(path.join(ws, '.agile', 'solutions'))).rejects.toThrow();
+  });
+
+  it('未传 workspaceRoot → comboAssets=null（带出能力随清单能力显式启用）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    await writeComboAssets(repoDir);
+    const projectsRoot = await tmp();
+
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot);
+    expect(result.comboAssets).toBeNull();
+  });
+
+  it('overrides 覆盖目录名不影响快照路径（快照按组合名落盘，与成员目录名无关）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    await writeComboAssets(repoDir);
+    const { ws, projectsRoot } = await workspace();
+
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, { backend: 'admin-backend' }, { workspaceRoot: ws });
+
+    expect(
+      await fs.stat(path.join(ws, '.agile', 'solutions', 'admin-base', 'CLAUDE.md')),
+    ).toBeTruthy();
+    await expect(fs.stat(path.join(ws, '.agile', 'solutions', 'admin-backend'))).rejects.toThrow();
   });
 });
 

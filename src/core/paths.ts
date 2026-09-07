@@ -19,9 +19,9 @@ export const DEFAULT_PATHS = {
 export const DRAWER_PATHS = Object.values(DEFAULT_PATHS);
 
 /**
- * 默认插件市场 / 模板注册中心的 git 地址（占位，发布前替换为实际仓库）。
+ * 默认插件市场 / 模板注册中心的 git 地址（官方源）。
  * settings.json 可覆盖（plugins.marketplace / templates.registry），
- * 新增插件或模板只需更新这两个仓库，CLI 无需发版。
+ * 新增插件或模板只需更新这两个仓库。
  */
 export const DEFAULT_PLUGIN_MARKETPLACE = 'https://github.com/pig0224/agile-plugins.git';
 export const DEFAULT_TEMPLATE_REGISTRY = 'https://github.com/pig0224/agile-templates.git';
