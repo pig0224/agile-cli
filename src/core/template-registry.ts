@@ -418,7 +418,10 @@ export async function scaffoldFromTemplate(
       throw new AgileError(`路径已存在且不是目录：${show(target)}`);
     }
     if ((await fs.readdir(target)).length > 0) {
-      const manifest = opts.workspaceRoot ? await readProjectManifest(opts.workspaceRoot, name) : null;
+      // 清单按实际落地目录名读写（与写入端 dirName 一致）；不得用项目名参数——大小写敏感平台会读不到
+      const manifest = opts.workspaceRoot
+        ? await readProjectManifest(opts.workspaceRoot, path.basename(target))
+        : null;
       if (manifest) {
         if (opts.force?.all) {
           rebuild = true; // 有本 CLI 清单 = 本 CLI 生成，允许先删后重建

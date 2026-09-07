@@ -588,4 +588,21 @@ describe('scaffoldFromTemplate 生成清单与 --force（单例模板断点续�
       scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, { workspaceRoot: ws }),
     ).rejects.toThrow(/目录已存在/);
   });
+
+  it('清单读取按实际落地目录名（basename(target)），不依赖项目名参数——大小写敏感平台一致性（CI 回归）', async () => {
+    // name 参数与落地目录名有大小写之外的实质差异：Windows 大小写不敏感无法复现读取错位，
+    // 故用完全不同的 name（Order-Svc vs order-service）使错位在任何平台都可检出
+    const { repoDir, registry } = await javaRepo();
+    const ws = await tmp();
+    const target = path.join(ws, 'projects', 'order-service');
+    const opts = { workspaceRoot: ws };
+
+    await scaffoldFromTemplate(repoDir, 'Order-Svc', 'java-springboot', target, registry, opts);
+    expect((await readProjectManifest(ws, 'order-service'))?.dirName).toBe('order-service');
+
+    await fs.rm(path.join(target, 'package.json'));
+    await expect(
+      scaffoldFromTemplate(repoDir, 'Order-Svc', 'java-springboot', target, registry, opts),
+    ).rejects.toThrow(/与生成清单不符.*--force/s);
+  });
 });
