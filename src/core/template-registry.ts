@@ -20,6 +20,7 @@ import {
   writeProjectManifest,
 } from './manifest.js';
 import { templateCacheRoot } from './paths.js';
+import { cliVersion } from '../version.js';
 
 /** 名字规范（单例模板名/组合名/成员项目名通用）：小写字母开头，仅小写字母/数字/连字符（防冲突的第一道防线） */
 export const TEMPLATE_NAME_RE = /^[a-z][a-z0-9-]*$/;
@@ -44,7 +45,8 @@ export const SolutionEntrySchema = z.object({
 });
 
 export const TemplateRegistrySchema = z.object({
-  version: z.literal(2),
+  /** 显式格式版本：宽进（number.int）以支持 loadTemplates 的友好版本门禁（仅支持 v2，高于/低于均给升级出路） */
+  version: z.number().int(),
   singles: z.array(SingleEntrySchema).default([]),
   /** 组合模板（多项目系统）：技术栈模板之上的声明式组合层；缺省无组合 */
   solutions: z.array(SolutionEntrySchema).default([]),
@@ -261,6 +263,13 @@ export async function validateTemplateRepo(
   return issues;
 }
 
+/** registry 版本不符的门禁文案（给未来 v3 一条通用出路：明确最低版本 + 升级命令） */
+function registryVersionError(actual: number): AgileError {
+  return new AgileError(
+    `模板注册中心为 v${actual} 布局，当前 CLI ${cliVersion} 仅支持 v2。请升级：npm i -g fcc-agile-cli`,
+  );
+}
+
 /** 加载模板注册中心（ensureRepo + 解析 + 校验） */
 export async function loadTemplates(
   url: string,
@@ -283,7 +292,18 @@ export async function loadTemplates(
   if (content == null) {
     throw new AgileError(`模板仓库 ${url} 缺少 registry.json${stale ? '（当前为离线缓存副本）' : ''}`);
   }
-  const registry = parseJson(content, TemplateRegistrySchema, 'registry.json');
+  let registry: TemplateRegistry;
+  try {
+    registry = parseJson(content, TemplateRegistrySchema, 'registry.json');
+  } catch (e) {
+    // 解析/校验失败统一附当前版本与升级命令——registry 若来自更新布局的模板源，旧 CLI 不再只报难懂的校验噪音
+    throw new AgileError(
+      `${(e as Error).message}\n（当前 CLI ${cliVersion}；若模板源为更新布局，请升级：npm i -g fcc-agile-cli）`,
+    );
+  }
+  if (registry.version !== 2) {
+    throw registryVersionError(registry.version);
+  }
   const issues = await validateTemplateRepo(repoDir, registry);
   return { registry, repoDir, issues, stale };
 }

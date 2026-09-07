@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { parseJson } from '../src/core/config.js';
 import {
+  loadTemplates,
   scaffoldFromTemplate,
   scaffoldSolution,
   solutionListRows,
@@ -14,6 +15,7 @@ import {
   type SolutionEntry,
   type TemplateRegistry,
 } from '../src/core/template-registry.js';
+import { cliVersion } from '../src/version.js';
 import {
   deleteProjectManifest,
   listActualFiles,
@@ -92,6 +94,51 @@ describe('templateCacheDir', () => {
   });
 });
 
+describe('loadTemplates registry 版本门禁与升级提示（旧版布局/未来 v3 的通用出路）', () => {
+  /** 最小 fixture：本地直读目录（含 registry.json + 一个成员目录） */
+  async function registryRepo(content: string): Promise<string> {
+    const repoDir = await tmp();
+    await fs.writeFile(path.join(repoDir, 'registry.json'), content, 'utf8');
+    await writePkgPlaceholder(path.join(repoDir, 'singles', 'vue3-vite'));
+    return repoDir;
+  }
+  const v2Body = { singles: [{ name: 'vue3-vite', description: 'Vue 3 前端' }] };
+
+  it('version 高于支持（v3）→ 门禁文案：registry 为 v3 布局 + 当前 CLI 版本 + 升级命令，退出路径为 AgileError', async () => {
+    const repoDir = await registryRepo(JSON.stringify({ version: 3, ...v2Body }));
+    await expect(loadTemplates(repoDir)).rejects.toThrow(
+      new RegExp(`注册中心为 v3 布局.*当前 CLI ${cliVersion}.*npm i -g fcc-agile-cli`, 's'),
+    );
+  });
+
+  it('version 低于支持 → 同一门禁（统一文案，指明仅支持 v2）', async () => {
+    const repoDir = await registryRepo(JSON.stringify({ version: 1, ...v2Body }));
+    await expect(loadTemplates(repoDir)).rejects.toThrow(/注册中心为 v1 布局.*仅支持 v2/s);
+  });
+
+  it('解析失败（坏 JSON）→ 错误信息附当前 CLI 版本与升级命令', async () => {
+    const repoDir = await registryRepo('{ not json');
+    await expect(loadTemplates(repoDir)).rejects.toThrow(
+      new RegExp(`不是合法的 JSON[\\s\\S]*当前 CLI ${cliVersion}.*npm i -g fcc-agile-cli`),
+    );
+  });
+
+  it('schema 校验失败（singles 缺 description）→ 同样附当前 CLI 版本与升级命令', async () => {
+    const repoDir = await registryRepo(JSON.stringify({ version: 2, singles: [{ name: 'vue3-vite' }] }));
+    await expect(loadTemplates(repoDir)).rejects.toThrow(
+      new RegExp(`格式校验失败[\\s\\S]*当前 CLI ${cliVersion}.*npm i -g fcc-agile-cli`),
+    );
+  });
+
+  it('回归：合法 v2 registry 加载行为不变（issues 为空、registry 内容透传）', async () => {
+    const repoDir = await registryRepo(JSON.stringify({ version: 2, ...v2Body }));
+    const { registry, issues } = await loadTemplates(repoDir);
+    expect(registry.version).toBe(2);
+    expect(registry.singles).toHaveLength(1);
+    expect(issues).toEqual([]);
+  });
+});
+
 describe('TemplateRegistrySchema（registry.json v2 解析）', () => {
   const parse = (content: string) => parseJson(content, TemplateRegistrySchema, 'registry.json');
 
@@ -128,8 +175,11 @@ describe('TemplateRegistrySchema（registry.json v2 解析）', () => {
     expect(registry.solutions).toEqual([]);
   });
 
-  it('version 非 2 / description 空白 / projects 空数组 / language 空数组 / 非法 JSON → 报错', () => {
-    expect(() => parse('{"version":1}')).toThrow(/校验失败/);
+  it('description 空白 / projects 空数组 / language 空数组 / 非法 JSON → 报错；version 非 2 由 loadTemplates 门禁处理（schema 只要求整数）', () => {
+    // version 1/3 在 loadTemplates 层给出「升级出路」门禁（见 loadTemplates describe），schema 层宽进只拦非法形态
+    expect(() => parse('{"version":1}')).not.toThrow();
+    expect(() => parse('{"version":2.5}')).toThrow(/校验失败/);
+    expect(() => parse('{"version":"2"}')).toThrow(/校验失败/);
     expect(() =>
       parse(JSON.stringify({ version: 2, singles: [{ name: 'a', description: '   ' }] })),
     ).toThrow(/校验失败/);
