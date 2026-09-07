@@ -49,19 +49,27 @@ export const ARTIFACT_NAMES = new Set([
 /** 锁文件：默认跳过（CopyOptions.keepLockfiles 可保留复制语义） */
 const LOCKFILE_NAMES = new Set(['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock']);
 
+/** 模板复制结果：notices = 忽略通知；files = 已复制文件的相对路径清单（替换后的落地路径，/ 分隔，供生成清单记录） */
+export interface CopyResult {
+  notices: CopyNotice[];
+  files: string[];
+}
+
 /** 将模板目录复制到 target，并做 {{name}} / {{safeName}} 占位替换（文本文件与目录名）。
  *  忽略安装/构建产物与锁文件；符号链接/junction 一律不 follow、不复制——
  *  防止把链接目标当文件 readFile（junction 指向目录时抛 EISDIR）或静默复制产物污染生成物。
- *  返回被忽略条目的通知（每个条目一条，不逐文件展开），由命令层负责输出。 */
+ *  返回被忽略条目的通知（每个条目一条，不逐文件展开）与已复制文件清单，由命令层负责输出。 */
 export async function copyAndSubstitute(
   src: string,
   dest: string,
   vars: Record<string, string>,
   opts: CopyOptions = {},
-): Promise<CopyNotice[]> {
+): Promise<CopyResult> {
   const notices: CopyNotice[] = [];
-  await walkCopy(src, dest, vars, opts, '', notices);
-  return notices;
+  const files: string[] = [];
+  await walkCopy(src, dest, vars, opts, '', notices, files);
+  files.sort();
+  return { notices, files };
 }
 
 async function walkCopy(
@@ -71,6 +79,7 @@ async function walkCopy(
   opts: CopyOptions,
   rel: string,
   notices: CopyNotice[],
+  files: string[],
 ): Promise<void> {
   const entries = await fs.readdir(src, { withFileTypes: true });
   await fs.mkdir(dest, { recursive: true });
@@ -91,8 +100,10 @@ async function walkCopy(
     let name = entry.name;
     for (const [k, v] of Object.entries(vars)) name = name.replaceAll(k, v);
     const d = path.join(dest, name);
+    // 落地相对路径（替换后的名字）——生成清单记录的是实际落盘内容
+    const relDest = rel ? `${rel}/${name}` : name;
     if (st.isDirectory()) {
-      await walkCopy(s, d, vars, opts, relPath, notices);
+      await walkCopy(s, d, vars, opts, relDest, notices, files);
     } else if (st.isFile()) {
       if (!opts.keepLockfiles && LOCKFILE_NAMES.has(entry.name)) {
         notices.push({ path: relPath, reason: 'lockfile' });
@@ -108,6 +119,7 @@ async function walkCopy(
       } else {
         await fs.copyFile(s, d);
       }
+      files.push(relDest);
     } else {
       // 非 dir/file/symlink 的非常规条目（fifo 等）：跳过并通知，不中断复制
       notices.push({ path: relPath, reason: 'artifact' });

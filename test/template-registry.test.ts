@@ -12,6 +12,11 @@ import {
   TemplateRegistrySchema,
   type TemplateRegistry,
 } from '../src/core/template-registry.js';
+import {
+  deleteProjectManifest,
+  listActualFiles,
+  readProjectManifest,
+} from '../src/core/manifest.js';
 
 function tmp(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'agile-tpl-'));
@@ -357,5 +362,230 @@ describe('scaffoldSolution', () => {
     await expect(
       scaffoldSolution(repoDir, registry, 'nope', projectsRoot),
     ).rejects.toThrow(/组合模板不存在/);
+  });
+});
+
+describe('scaffoldSolution 生成清单与 --force（断点续建防护）', () => {
+  function solutionRepo() {
+    return makeRepo([{ name: 'vue3-vite' }, { name: 'go-service' }], {
+      'admin-base': { projects: { backend: '后端服务', frontend: '前端应用' } },
+    });
+  }
+
+  async function workspace() {
+    const ws = await tmp();
+    return { ws, projectsRoot: path.join(ws, 'projects') };
+  }
+
+  it('首次生成写 manifest：来源/成员原名/落地目录/文件清单/生成时间，文件清单与实际一致', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    // 上次崩溃可能残留的临时目录 → 生成前清扫
+    await fs.mkdir(path.join(projectsRoot, '.tmp-backend-stale'), { recursive: true });
+    await fs.writeFile(path.join(projectsRoot, '.tmp-backend-stale', 'junk.txt'), 'x', 'utf8');
+
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+
+    expect(result.created).toEqual(['backend', 'frontend']);
+    const m = await readProjectManifest(ws, 'backend');
+    expect(m).toMatchObject({ version: 1, source: 'admin-base', member: 'backend', dirName: 'backend' });
+    expect(m?.files).toEqual(await listActualFiles(path.join(projectsRoot, 'backend')));
+    expect(m?.files).toContain('package.json');
+    expect(m?.templateCommit).toBeNull(); // fixture 非 git 仓，取不到 commit 置空
+    expect(Number.isNaN(new Date(m!.generatedAt).getTime())).toBe(false);
+    // 残留临时目录已被清扫
+    expect((await fs.readdir(projectsRoot)).filter((n) => n.startsWith('.tmp-'))).toEqual([]);
+  });
+
+  it('完整重跑 → 清单比对一致 → 跳过（补缺语义不抛错）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    const second = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    expect(second.created).toEqual([]);
+    expect(second.skipped).toEqual(['backend', 'frontend']);
+    expect(second.rebuilt).toEqual([]);
+  });
+
+  it('生成物缺文件后重跑 → 硬错误（缺 N 文件，提示删除重跑或 --force）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    await fs.rm(path.join(projectsRoot, 'backend', 'package.json'));
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws }),
+    ).rejects.toThrow(/projects\/backend 与生成清单不符（缺 1 文件 \/ 多 0 项）.*--force/s);
+  });
+
+  it('生成物多出文件后重跑 → 硬错误（多 N 项）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    await fs.writeFile(path.join(projectsRoot, 'backend', 'extra.txt'), 'x', 'utf8');
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws }),
+    ).rejects.toThrow(/projects\/backend 与生成清单不符（缺 0 文件 \/ 多 1 项）/);
+  });
+
+  it('无 manifest 陌生目录重跑 → 维持跳过 + warn（向后兼容，不升级为错误）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    await deleteProjectManifest(ws, 'backend');
+    const second = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    expect(second.created).toEqual([]);
+    expect(second.skipped).toEqual(['backend', 'frontend']);
+  });
+
+  it('--force <成员>：有清单目录先删后重建（多余文件被清除），rebuilt 上报，未指定成员照常跳过', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    await fs.writeFile(path.join(projectsRoot, 'backend', 'extra.txt'), 'x', 'utf8');
+
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, {
+      workspaceRoot: ws,
+      force: { all: false, members: ['backend'] },
+    });
+
+    expect(result.rebuilt).toEqual(['backend']);
+    expect(result.created).toEqual([]);
+    expect(result.skipped).toEqual(['frontend']);
+    await expect(fs.stat(path.join(projectsRoot, 'backend', 'extra.txt'))).rejects.toThrow();
+    expect((await readProjectManifest(ws, 'backend'))?.files).toEqual(
+      await listActualFiles(path.join(projectsRoot, 'backend')),
+    );
+  });
+
+  it('--force <成员>：无清单陌生目录拒绝（防误删手写项目），目录原样保留', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await fs.mkdir(path.join(projectsRoot, 'backend'), { recursive: true });
+    await fs.writeFile(path.join(projectsRoot, 'backend', 'handwritten.txt'), 'user code', 'utf8');
+
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, {
+        workspaceRoot: ws,
+        force: { all: false, members: ['backend'] },
+      }),
+    ).rejects.toThrow(/拒绝重建.*projects\/backend/s);
+    expect(await fs.readFile(path.join(projectsRoot, 'backend', 'handwritten.txt'), 'utf8')).toBe('user code');
+  });
+
+  it('--force 无值：陌生成员拒绝并列出路径；报错后有清单成员未被改动', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    await deleteProjectManifest(ws, 'frontend'); // frontend 变陌生
+
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, {
+        workspaceRoot: ws,
+        force: { all: true, members: [] },
+      }),
+    ).rejects.toThrow(/拒绝重建无生成清单的目录.*projects\/frontend/s);
+    // backend 有清单但未被重建（报错即整体不执行）
+    expect(await readProjectManifest(ws, 'backend')).not.toBeNull();
+    expect(await fs.readFile(path.join(projectsRoot, 'backend', 'package.json'), 'utf8')).toContain('"name":"backend"');
+  });
+
+  it('--force 引用不存在的成员 → 报错', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, {
+        workspaceRoot: ws,
+        force: { all: false, members: ['ghost'] },
+      }),
+    ).rejects.toThrow(/不存在的成员/);
+  });
+
+  it('事务性：后一成员目标被文件占用 → 报错且回滚本次新建成员（无残缺、无 .tmp 残留）；排除障碍后重跑成功', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    await fs.mkdir(projectsRoot, { recursive: true });
+    await fs.writeFile(path.join(projectsRoot, 'frontend'), 'occupied', 'utf8'); // 非目录占用目标路径
+
+    await expect(
+      scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws }),
+    ).rejects.toThrow(/不是目录/);
+    // 本次运行已生成的 backend 被回滚，不留残缺
+    await expect(fs.stat(path.join(projectsRoot, 'backend'))).rejects.toThrow();
+    await expect(fs.stat(path.join(ws, '.agile', 'manifests', 'backend.json'))).rejects.toThrow();
+    expect(await fs.readFile(path.join(projectsRoot, 'frontend'), 'utf8')).toBe('occupied');
+    expect((await fs.readdir(projectsRoot)).filter((n) => n.startsWith('.tmp-'))).toEqual([]);
+
+    await fs.rm(path.join(projectsRoot, 'frontend'));
+    const second = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot, {}, { workspaceRoot: ws });
+    expect(second.created).toEqual(['backend', 'frontend']);
+  });
+
+  it('未传 workspaceRoot → 不写 manifest（清单能力显式启用）', async () => {
+    const { repoDir, registry } = await solutionRepo();
+    const { ws, projectsRoot } = await workspace();
+    const result = await scaffoldSolution(repoDir, registry, 'admin-base', projectsRoot);
+    expect(result.created).toEqual(['backend', 'frontend']);
+    await expect(fs.stat(path.join(ws, '.agile'))).rejects.toThrow();
+  });
+});
+
+describe('scaffoldFromTemplate 生成清单与 --force（单例模板断点续建防护）', () => {
+  async function javaRepo() {
+    const repo = await makeRepo([{ name: 'java-springboot' }]);
+    const pkgDir = path.join(repo.repoDir, 'singles', 'java-springboot', 'src', 'com', 'example', '{{safeName}}');
+    await fs.mkdir(pkgDir, { recursive: true });
+    await fs.writeFile(path.join(pkgDir, 'App.java'), 'package com.example.{{safeName}};', 'utf8');
+    return repo;
+  }
+
+  it('首次生成写 manifest（source=模板名，无 member）；完整重跑报目录已存在；缺文件重跑报清单不符；--force 重建', async () => {
+    const { repoDir, registry } = await javaRepo();
+    const ws = await tmp();
+    const target = path.join(ws, 'projects', 'order-service');
+    const opts = { workspaceRoot: ws };
+
+    const first = await scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, opts);
+    expect(first.rebuilt).toBe(false);
+    const m = await readProjectManifest(ws, 'order-service');
+    expect(m?.source).toBe('java-springboot');
+    expect(m?.member).toBeUndefined();
+    expect(m?.dirName).toBe('order-service');
+    expect(m?.files).toEqual(await listActualFiles(target));
+
+    await expect(
+      scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, opts),
+    ).rejects.toThrow(/目录已存在/);
+
+    await fs.rm(path.join(target, 'package.json'));
+    await expect(
+      scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, opts),
+    ).rejects.toThrow(/与生成清单不符.*--force/s);
+
+    const forced = await scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, {
+      ...opts,
+      force: { all: true, members: [] },
+    });
+    expect(forced.rebuilt).toBe(true);
+    expect(await fs.stat(path.join(target, 'package.json'))).toBeTruthy();
+    expect((await readProjectManifest(ws, 'order-service'))?.files).toEqual(await listActualFiles(target));
+  });
+
+  it('无清单目录（陌生/旧版生成）--force 拒绝；无清单且未 force 重跑维持目录已存在', async () => {
+    const { repoDir, registry } = await javaRepo();
+    const ws = await tmp();
+    const target = path.join(ws, 'projects', 'order-service');
+    await fs.mkdir(target, { recursive: true });
+    await fs.writeFile(path.join(target, 'handwritten.txt'), 'user code', 'utf8');
+
+    await expect(
+      scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, {
+        workspaceRoot: ws,
+        force: { all: true, members: [] },
+      }),
+    ).rejects.toThrow(/拒绝重建/);
+    expect(await fs.readFile(path.join(target, 'handwritten.txt'), 'utf8')).toBe('user code');
+    await expect(
+      scaffoldFromTemplate(repoDir, 'Order-Service', 'java-springboot', target, registry, { workspaceRoot: ws }),
+    ).rejects.toThrow(/目录已存在/);
   });
 });
