@@ -15,10 +15,9 @@ import {
   scaffoldFromTemplate,
   scaffoldSolution,
   TEMPLATE_NAME_RE,
-  type ForceSpec,
   type SolutionScaffoldResult,
 } from '../core/template-registry.js';
-import { assertProjectName, scaffoldEmptyProject, type CopyNotice } from '../core/scaffold.js';
+import { PROJECT_NAME_RE, scaffoldEmptyProject, type CopyNotice } from '../core/scaffold.js';
 import * as ui from '../ui.js';
 
 /** 模板复制忽略通知的说明文字（reason → 中文标签） */
@@ -40,7 +39,7 @@ const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
   techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n外部 git 仓库（公司规范团队维护），目录不入 workspace 仓库（.gitignore 忽略）：`agile config set tech-specs <git-url>` 登记后 `agile sync` 自动 clone/拉取。\n',
   bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内普通目录，随仓库提交获得版本管理）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`——登记后目录改为 .gitignore 忽略、不入 workspace 仓库（sync 自动补写忽略行），骨架目录自动让位。\n',
   bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
-  projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此（workspace 仓库内目录；组合模板一次生成多个平铺成员项目，成员名与模板名同命名空间、全局唯一）。\n使用 `agile init project <name> [--template <模板或组合模板名>]` 创建（--template 缺省为空项目骨架；agile template list 查看模板与组合模板）。\n',
+  projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此（workspace 仓库内目录；组合模板一次生成多个平铺成员项目，成员名与模板名同命名空间、全局唯一）。\n使用 `agile init project --template <模板或组合模板名> [--name <目录名 | 组合项目名称=目录名>]` 创建（--template 缺省为空项目骨架，此时 --name <目录名> 必填；agile template list 查看单例模板与组合模板）。\n',
   processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
 };
 
@@ -48,60 +47,62 @@ async function exists(p: string): Promise<boolean> {
   return fs.stat(p).then(() => true).catch(() => false);
 }
 
-/** --member 收集器（可重复）：只收集原始字符串，格式与冲突校验统一在 action 内做（AgileError 路径） */
-function collectMember(value: string, previous: string[]): string[] {
+/** --name 收集器（可重复）：只收集原始字符串；形态（裸值 / 键值）与合法性在 action 内按场景校验 */
+function collectName(value: string, previous: string[]): string[] {
   previous.push(value);
   return previous;
 }
 
-/** 解析 --member 原始串（成员名=目录名）为覆盖表；格式错误 / 重复成员抛中文报错 */
-function parseMemberOverrides(raw: string[]): Record<string, string> {
+/** --name 裸目录名校验：同时用作 projects/ 目录名与 {{name}} 占位（npm name / go module 等），
+ *  且杜绝 ../ 路径穿越出 projects/ */
+function assertDirName(value: string): string {
+  if (!PROJECT_NAME_RE.test(value)) {
+    throw new AgileError(`--name 目录名不合法（格式 ^[a-z][a-z0-9-]*$，仅小写字母/数字/连字符）：${value}`);
+  }
+  return value;
+}
+
+/** 解析单例模板 / 空项目骨架场景的 --name：裸目录名，至多 1 个（空项目骨架必填，单例缺省由调用方回落模板名）。
+ *  键值形态 / 多值 / 不合法目录名报错并说明该场景的正确形态。 */
+function parseBareName(raw: string[], scene: '空项目骨架' | '单例模板', required: true): string;
+function parseBareName(raw: string[], scene: '空项目骨架' | '单例模板', required: false): string | undefined;
+function parseBareName(raw: string[], scene: '空项目骨架' | '单例模板', required: boolean): string | undefined {
+  if (raw.length === 0) {
+    if (required) {
+      throw new AgileError(`${scene}需要 --name <目录名> 指定项目目录名（2.4.0 起不再接受位置参数）`);
+    }
+    return undefined;
+  }
+  if (raw.length > 1) {
+    throw new AgileError(`--name 只能指定一次（${scene}的 --name 为单个裸目录名，如 --name my-app）`);
+  }
+  const value = raw[0]!;
+  if (value.includes('=')) {
+    throw new AgileError(
+      `--name 格式不合法：${scene}的 --name 为裸目录名（如 --name my-app）；「组合项目名称=目录名」形态仅组合模板可用`,
+    );
+  }
+  return assertDirName(value);
+}
+
+/** 解析组合模板场景的 --name：组合项目名称=目录名 键值（可重复）；裸值 / 格式错误 / 重复成员报错。
+ *  缺省（空数组）= 各成员用组合项目名称（core 按登记成员名落盘）；未知成员由 core 校验拒绝。 */
+function parseSolutionNameOverrides(raw: string[]): Record<string, string> {
   const overrides: Record<string, string> = {};
   for (const item of raw) {
     const m = /^([a-z][a-z0-9-]*)=([a-z][a-z0-9-]*)$/.exec(item);
     if (!m || !m[1] || !m[2]) {
       throw new AgileError(
-        `--member 格式不合法（须为 成员名=目录名，两端满足 ^[a-z][a-z0-9-]*$）：${item}`,
+        `--name 格式不合法：组合模板的 --name 为 组合项目名称=目录名（两端满足 ^[a-z][a-z0-9-]*$）：${item}`,
       );
     }
     const member = m[1];
-    const dir = m[2];
     if (overrides[member] !== undefined) {
-      throw new AgileError(`--member 重复指定成员：${member}`);
+      throw new AgileError(`--name 重复指定组合项目名称：${member}`);
     }
-    overrides[member] = dir;
+    overrides[member] = m[2];
   }
   return overrides;
-}
-
-/** --force 收集器（可重复）。commander 15 对裸标志不走 collector 直接置 true，
- *  裸标志后再带值时会以 true 作为 previous 传入——两种形态都归一成数组。 */
-function collectForce(
-  value: string | true,
-  previous: Array<string | true> | true | undefined,
-): Array<string | true> {
-  if (previous === true) return [true, value];
-  const base = Array.isArray(previous) ? [...previous] : [];
-  base.push(value);
-  return base;
-}
-
-/** 解析 --force：无值 = 全部已存在成员；--force <成员名> = 重建指定成员（可重复）；两者混用报错 */
-function parseForce(raw: Array<string | true> | string | boolean | undefined): ForceSpec {
-  const list: Array<string | true> =
-    raw === undefined || raw === false
-      ? []
-      : Array.isArray(raw)
-        ? raw
-        : [raw as string | true];
-  const all = list.includes(true);
-  const members = list.filter((v): v is string => v !== true);
-  if (all && members.length > 0) {
-    throw new AgileError(
-      '--force 不能同时无值与指定成员名（--force = 全部已存在成员；--force <成员名> = 重建指定成员，可重复）',
-    );
-  }
-  return { all, members };
 }
 
 /** 产品需求文档（PRD）写作模板——产品在仓库（GitHub Web / VS Code）按此结构写，最低要求：背景/目标/AC ≥ 1 */
@@ -297,44 +298,37 @@ export const initCommand = new Command('init')
   )
   .addCommand(
     new Command('project')
-      .description('初始化项目到 projects/ 下（workspace 单仓内普通目录）：--template 从模板或组合模板脚手架（组合模板一次生成多个平铺成员项目），缺省为空项目骨架')
-      .argument('<name>', '项目名（作为 projects/ 下的目录名；--template 为组合模板时仅为输出标签，不落目录）')
-      .option('--template <template>', '模板名或组合模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
+      .description('初始化项目到 projects/ 下（workspace 单仓内普通目录）：--template 从单例模板或组合模板脚手架（组合模板一次生成多个平铺成员项目），缺省为空项目骨架')
+      .argument('[name...]', '（已废弃）原项目名位置参数——2.4.0 起目录命名统一用 --name')
+      .option('--template <template>', '单例模板名或组合模板名（agile template list 查看；缺省创建空项目骨架，不访问模板注册中心）')
       .option(
-        '--member <mapping>',
-        '组合模板成员目录名覆盖（格式：成员名=目录名，可重复；仅 --template 为组合模板时可用）',
-        collectMember,
+        '--name <name>',
+        '项目目录名（可重复）。单例模板 / 空项目骨架：--name <目录名>；组合模板：--name <组合项目名称>=<目录名>。缺省：单例用单例项目名称（模板名），组合用各成员的组合项目名称',
+        collectName,
         [] as string[],
       )
-      .option(
-        '--force [member]',
-        '强制重建已存在成员（无值 = 全部已存在成员；--force <成员名> = 指定成员，可重复；仅对有本 CLI 生成清单的目录生效——陌生目录拒绝重建以防误删手写项目）',
-        collectForce,
-        [] as Array<string | true>,
-      )
-      .action(async (name: string, opts: { template?: string; member: string[]; force: Array<string | true> | boolean }) => {
+      .action(async (legacy: string[], opts: { template?: string; name: string[] }) => {
+        // 位置参数已废弃（2.4.0）：显式给迁移指引而非 commander 语法错误
+        if (legacy.length > 0) {
+          throw new AgileError(
+            `init project 的位置参数已废弃（2.4.0）：${legacy.join(' ')}。目录命名统一用 --name：\n` +
+              '  空项目骨架：agile init project --name <目录名>\n' +
+              '  单例模板：  agile init project --template <模板名> [--name <目录名>]\n' +
+              '  组合模板：  agile init project --template <组合名> [--name <组合项目名称>=<目录名>]...',
+          );
+        }
         const root = requireWorkspaceRoot();
-        // 项目名校验：同时用作 projects/ 目录名与模板 {{name}} 占位（npm name / go module 等），
-        // 且杜绝 ../ 路径穿越出 projects/
-        assertProjectName(name);
-        // --force 归一化（commander 15 裸标志直接置 true，不走 collector）并提前校验混用
-        const force = parseForce(opts.force);
         const settings = await loadSettings(root);
-        const repoPath = `${settings.paths.projects}/${name}`;
-        const abs = path.join(root, repoPath);
 
         if (opts.template === undefined) {
-          if (opts.member.length > 0) {
-            throw new AgileError('--member 仅在 --template 为组合模板时可用');
-          }
-          if (force.all || force.members.length > 0) {
-            throw new AgileError('--force 仅在 --template 时可用（空项目骨架无模板可重建）');
-          }
-          // 空项目骨架：不依赖模板注册中心（不联网、不读缓存）
+          // 空项目骨架：--name 裸值必填；不依赖模板注册中心（不联网、不读缓存）
+          const dirName = parseBareName(opts.name, '空项目骨架', true);
+          const repoPath = `${settings.paths.projects}/${dirName}`;
+          const abs = path.join(root, repoPath);
           if (await exists(abs)) {
             throw new AgileError(`目录已存在：${repoPath}`);
           }
-          await scaffoldEmptyProject(abs, name);
+          await scaffoldEmptyProject(abs, dirName);
           await git(root, ['add', repoPath]);
           console.log(ui.ok(`项目初始化完成：${repoPath}（空项目骨架）`));
           console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
@@ -351,58 +345,52 @@ export const initCommand = new Command('init')
           throw new AgileError(`模板注册中心存在一致性问题，拒绝生成：\n${issues.map((i) => `  - ${i}`).join('\n')}`);
         }
 
-        // 2a. 单例模板：平铺生成到 projects/<name>（重跑校验/重建语义在 core，按生成清单判定）
+        // 2a. 单例模板：生成到 projects/<目录名>/（目录名 = --name 裸值 ?? 单例项目名称；
+        //     {{name}} = 实际落地目录名，生成清单 member = 单例项目名称；重跑防护在 core，按生成清单判定）
         if (tplRegistry.singles.some((t) => t.name === opts.template)) {
-          if (opts.member.length > 0) {
-            throw new AgileError('--member 仅在 --template 为组合模板时可用');
-          }
-          if (force.members.length > 0) {
-            throw new AgileError('--force <成员名> 仅组合模板支持；单例模板使用无值 --force');
-          }
-          await fs.mkdir(path.dirname(abs), { recursive: true });
-          const result = await scaffoldFromTemplate(repoDir, name, opts.template, abs, tplRegistry, {
+          const dirName = parseBareName(opts.name, '单例模板', false) ?? opts.template;
+          const targetRel = `${settings.paths.projects}/${dirName}`;
+          const targetAbs = path.join(root, targetRel);
+          await fs.mkdir(path.dirname(targetAbs), { recursive: true });
+          const result = await scaffoldFromTemplate(repoDir, opts.template, targetAbs, tplRegistry, {
             workspaceRoot: root,
-            force,
           });
           printCopyNotices(result.notices);
-          if (result.rebuilt) {
-            console.log(ui.warn(`已强制重建：${repoPath}（原目录内容已按模板重生成）`));
-          }
-          await git(root, ['add', repoPath]);
-          // 生成清单入库：成员重跑的完整性校验依赖它，随项目一起走 PR
-          const manifestFile = `.agile/manifests/${name}.json`;
+          await git(root, ['add', targetRel]);
+          // 生成清单入库：重跑的完整性校验依赖它，随项目一起走 PR（清单文件名 = 实际落地目录名）
+          const manifestFile = `.agile/manifests/${dirName}.json`;
           if (await exists(path.join(root, manifestFile))) {
             await git(root, ['add', manifestFile]);
           }
-          console.log(ui.ok(`项目初始化完成：${repoPath}（template=${opts.template}）`));
+          console.log(ui.ok(`项目初始化完成：${targetRel}（template=${opts.template}）`));
           console.log(ui.dim('已 git add，commit 时机由你决定；提交后与 workspace 其余变更一起走一个 PR。'));
           return;
         }
 
-        // 2b. 组合模板：成员项目平铺落盘 projects/<成员目录名>/（成员 = 组合专属模板目录
-        //     solutions/<组合>/<成员>/；{{name}} = 实际目录名；<name> 仅为输出标签，不落目录）
+        // 2b. 组合模板：--name 键值（组合项目名称=目录名，可重复）覆盖成员目录名；缺省 = 各成员用组合项目名称。
+        //     成员项目平铺落盘 projects/<成员目录名>/（成员 = 组合专属模板目录 solutions/<组合>/<成员>/；{{name}} = 实际目录名）
         const solutionEntry = tplRegistry.solutions.find((s) => s.name === opts.template);
         if (solutionEntry === undefined) {
           const templates = tplRegistry.singles.map((t) => t.name).join('、') || '（无）';
           const solutions = tplRegistry.solutions.map((s) => s.name);
           throw new AgileError(
-            `模板不存在：${opts.template}。可用模板：${templates}${
+            `模板不存在：${opts.template}。可用单例模板：${templates}${
               solutions.length > 0 ? `\n可用组合模板：${solutions.join('、')}` : ''
             }`,
           );
         }
-        const overrides = parseMemberOverrides(opts.member);
+        const overrides = parseSolutionNameOverrides(opts.name);
         const result: SolutionScaffoldResult = await scaffoldSolution(
           repoDir,
           tplRegistry,
           opts.template,
           path.join(root, settings.paths.projects),
           overrides,
-          { workspaceRoot: root, force },
+          { workspaceRoot: root },
         );
 
-        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit；逐成员 add 生成/重建的目录与对应生成清单）
-        for (const d of [...result.created, ...result.rebuilt]) {
+        // 3. 纳入 workspace 仓库版本管理（只 add，不自动 commit；逐成员 add 生成的目录与对应生成清单）
+        for (const d of result.created) {
           await git(root, ['add', `${settings.paths.projects}/${d}`]);
           const manifestFile = `.agile/manifests/${d}.json`;
           if (await exists(path.join(root, manifestFile))) {
@@ -414,11 +402,8 @@ export const initCommand = new Command('init')
           await git(root, ['add', `.agile/solutions/${opts.template}`]);
         }
 
-        console.log(ui.ok(`系统 ${name} 初始化完成（template=${opts.template}，成员平铺于 projects/）：`));
+        console.log(ui.ok(`组合 ${opts.template} 初始化完成（成员平铺于 ${settings.paths.projects}/）：`));
         for (const d of result.created) console.log(ui.ok(`  + ${settings.paths.projects}/${d}`));
-        for (const d of result.rebuilt) {
-          console.log(ui.warn(`  ! 已强制重建：${settings.paths.projects}/${d}（原目录内容已按模板重生成）`));
-        }
         for (const d of result.skipped) {
           console.log(ui.warn(`  = 已存在，跳过：${settings.paths.projects}/${d}（若为同名非组合项目请人工核对）`));
         }

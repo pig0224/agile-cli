@@ -106,11 +106,15 @@ agile config set plugin-repo <src.git> && agile config set template-repo <tpl.gi
 agile config unset plugin-repo && agile config get plugin-repo   # 恢复内置官方源
 agile config list             # settings.json 全量
 agile template list           # 从模板源拉取注册中心（含组合模板成员名单分组）
-agile init project order-service --template go-service   # 落 projects/go-service + git add
-agile init project admin --template admin-base --member backend=admin-backend   # 组合模板 → 成员平铺 projects/{admin-backend,frontend}/ + 逐成员 git add（<name> 仅为输出标签；同时写生成清单 .agile/manifests/<成员目录名>.json 并 git add）
-agile init project admin --template admin-base --member backend=admin-backend   # 组合幂等补缺：清单一致的已存在成员跳过 + warn（补缺按本次的有效成员目录名，覆盖须带相同 --member）
-agile init project admin --template admin-base   # 撞名跳过路径：若某有效成员目录名已被同名普通项目占用（无生成清单）→ 该成员跳过 + warn（人工核对）
-rm projects/admin-backend/README.md && agile init project admin --template admin-base --member backend=admin-backend   # 清单校验路径：清单不符 → 硬错误「与生成清单不符（缺 N 文件 / 多 M 项）」，--force 可重建（无清单的陌生目录拒绝重建防误删）
+agile init project --template go-service                 # 单例：缺省 --name → 落 projects/go-service + git add
+agile init project --template go-service --name order    # 单例：--name 覆盖 → 落 projects/order（{{name}} = order；生成清单 member = go-service，文件名 = order.json）
+agile init project --name my-lib                         # 空项目骨架（--name 裸值必填，不访问模板注册中心）
+agile init project foo --template go-service             # 位置参数已废弃 → 废弃指引报错（2.4.0 BREAKING）
+agile init project --template admin-base --name backend=admin-backend   # 组合模板 → 成员平铺 projects/{admin-backend,frontend}/ + 逐成员 git add（同时写生成清单 .agile/manifests/<成员目录名>.json 并 git add）
+agile init project --template admin-base --name backend=admin-backend   # 组合幂等补缺：清单一致的已存在成员跳过 + warn（补缺按本次的有效成员目录名，覆盖须带相同 --name 键值）
+agile init project --template admin-base                 # 撞名跳过路径：若某有效成员目录名已被同名普通项目占用（无生成清单）→ 该成员跳过 + warn（人工核对）
+rm projects/admin-backend/README.md && agile init project --template admin-base --name backend=admin-backend   # 清单校验路径：清单不符 → 硬错误「与生成清单不符（缺 N 文件 / 多 M 项）……请删除该目录后重跑」（2.4.0 起无 --force 出路）
+mkdir projects/placeholder && agile init project --template admin-base   # 空目录放行：同名空目录被模板填充（计入 created）
 agile worktree create feature/STO-001                    # 前后自动 sync（worktree 内独立 clone）
 agile worktree remove feature/STO-001
 agile plugin install agile && agile plugin ls

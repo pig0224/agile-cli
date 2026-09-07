@@ -40,7 +40,7 @@ agile sync                        # 拉取外部仓库 + 模板缓存 + 插件
 
 # 3. 新建项目（模板来自模板注册中心 git 仓库，落 projects/ 普通目录）
 agile template list
-agile init project order-service --template go-service
+agile init project --template go-service   # 缺省 --name：目录名 = go-service
 
 # 4. 日常
 agile sync --dry-run             # 预览将要执行的动作
@@ -70,7 +70,7 @@ my-workspace/                    # 单一 git 仓库（团队）
 | 命令 | 说明 |
 |---|---|
 | `agile init workspace [--name <名>] [--tech-specs <url>] [--biz-tech-docs <url>] [--marketplace <url>] [--template-registry <url>]` | 初始化工作区（settings.json + 五抽屉 + git init；旧版三 yaml 自动迁移；--name 自定义 workspace 名称，缺省取目录名） |
-| `agile init project <name> [--template <t>] [--member <成员名>=<目录名>] [--force]` | 创建项目到 projects/（--template 从模板/组合模板生成，缺省为空项目骨架；组合模板 --member 覆盖成员目录名、--force 重建已存在成员——仅对有生成清单的目录生效；普通目录，git add） |
+| `agile init project [--template <t>] [--name <目录名 \| 组合项目名称=目录名>]` | 创建项目到 projects/（--template 从单例/组合模板生成，缺省为空项目骨架且 --name 必填；--name 三模式——空骨架/单例为裸目录名、组合为 成员名=目录名 可重复，缺省用模板名/成员名；普通目录，git add） |
 | `agile sync [--dry-run]` | 拉取四类外部资源：tech-specs / biz-tech-docs 仓库（clone 或快进，本地优先）+ 模板缓存刷新 + 插件按声明安装（绝不卸载） |
 | `agile config get/set/unset <tech-specs\|biz-tech-docs\|plugin-repo\|template-repo>` | 快捷配置外部仓库与插件/模板源地址（类 npm registry 换源体验；plugin-repo/template-repo 的 unset 恢复内置官方源） |
 | `agile config list` | 查看全部配置（settings.json） |

@@ -3,8 +3,8 @@ import path from 'node:path';
 import { z } from 'zod';
 
 /**
- * 项目生成清单：`agile init project --template` 每次生成（新建/强制重建）成功后写入
- * `.agile/manifests/<落地目录名>.json`，重跑补缺时据此做完整性校验——
+ * 项目生成清单：`agile init project --template` 每次生成成功后写入
+ * `.agile/manifests/<落地目录名>.json`，重跑时据此做完整性校验——
  * 清单存在但目录内容不符 = 上次生成残留或事后改动（硬错误提示处理），
  * 无清单 = 陌生目录（用户手写项目或旧版生成，维持跳过，向后兼容）。
  */
@@ -12,9 +12,9 @@ export const ProjectManifestSchema = z.object({
   version: z.literal(1),
   /** 来源：单例模板名或组合模板名 */
   source: z.string().min(1),
-  /** 成员原名（组合模板成员；单例模板省略） */
+  /** 成员原名（组合 = registry 登记成员名；单例 = 模板名） */
   member: z.string().min(1).optional(),
-  /** 实际落地目录名（含 --member 覆盖；即清单文件名） */
+  /** 实际落地目录名（含 --name 覆盖；即清单文件名） */
   dirName: z.string().min(1),
   /** 生成文件的相对路径数组（/ 分隔，与实际落地内容一致） */
   files: z.array(z.string()),

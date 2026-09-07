@@ -69,8 +69,8 @@ export const templateCommand = new Command('template')
           process.exitCode = 1;
         }
         console.log('');
-        console.log(ui.dim('使用：agile init project <name> --template <模板名>（--template 缺省创建空项目）'));
-        console.log(ui.dim('组合：agile init project <系统标签> --template <组合名> 平铺生成全部成员项目（--member 成员名=目录名 改成员目录名）'));
+        console.log(ui.dim('使用：agile init project --template <模板名> [--name <目录名>]（--template 缺省创建空项目骨架，--name <目录名> 必填）'));
+        console.log(ui.dim('组合：agile init project --template <组合名> [--name <组合项目名称>=<目录名>]... 平铺生成全部成员项目（缺省 --name 用各成员的组合项目名称）'));
       }),
   )
   .addCommand(

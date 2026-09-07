@@ -340,47 +340,26 @@ export async function cleanAllTemplateCaches(): Promise<number> {
   return cleaned;
 }
 
-/** --force 指定（命令层解析）：all = 无值 --force（全部已存在成员）；members = --force <成员名>（可重复） */
-export interface ForceSpec {
-  all: boolean;
-  members: string[];
-}
-
-/** 生成清单与 --force 行为选项。workspaceRoot 提供时启用生成清单能力
+/** 生成清单行为选项。workspaceRoot 提供时启用生成清单能力
  *  （.agile/manifests/ 写入与重跑完整性校验）；缺省只保留事务性生成（不留残缺）。 */
 export interface ScaffoldManifestOptions {
   workspaceRoot?: string;
-  force?: ForceSpec;
 }
 
 /** scaffoldFromTemplate 的结果（core 不打印，命令层负责输出） */
 export interface ScaffoldFromTemplateResult {
   /** 复制忽略通知（产物/符号链接/锁文件） */
   notices: CopyNotice[];
-  /** 本次是否为 --force 强制重建（先删后建） */
-  rebuilt: boolean;
 }
 
 function templateCommitOf(repoDir: string): Promise<string | null> {
   return gitTry(repoDir, ['rev-parse', 'HEAD']).then((r) => (r.ok ? r.stdout : null));
 }
 
-function forceApplies(force: ForceSpec | undefined, member: string): boolean {
-  if (!force) return false;
-  return force.all || force.members.includes(member);
-}
-
-/** 清单比对不一致：硬错误（疑似上次生成残留），提示删除重跑或 --force */
+/** 清单比对不一致：硬错误（疑似上次生成残留），提示删除重跑 */
 function mismatchError(displayPath: string, missing: string[], extra: string[]): AgileError {
   return new AgileError(
-    `${displayPath} 与生成清单不符（缺 ${missing.length} 文件 / 多 ${extra.length} 项），疑似上次生成残留；请删除该目录后重跑，或使用 --force 重生成`,
-  );
-}
-
-/** --force 护栏：无清单目录拒绝重建（防误删用户手写项目） */
-function forceGuardError(displayPaths: string[]): AgileError {
-  return new AgileError(
-    `拒绝重建无生成清单的目录：${displayPaths.join('、')}（可能为手写项目或旧版 CLI 生成，防止误删）；请人工确认后手动删除该目录，再重跑`,
+    `${displayPath} 与生成清单不符（缺 ${missing.length} 文件 / 多 ${extra.length} 项），疑似上次生成残留；请删除该目录后重跑`,
   );
 }
 
@@ -439,12 +418,12 @@ async function generateWithTransaction(
 }
 
 /** 从单例模板生成项目骨架到 target（占位符替换）；模板目录 = singles/<模板名>/（约定派生，无 path 字段）。
- *  target 已存在且非空：有本 CLI 生成清单 → 完整性校验（不符硬错误；--force 先删后重建）、
- *  无清单（陌生目录）→ 维持「目录已存在」（--force 拒绝重建）；空目录放行（2.1.0 兼容）。
- *  提供 workspaceRoot 时写生成清单，供重跑补缺时校验。 */
+ *  templateName = 单例项目名称（写入生成清单 member）；target = 实际落盘目录
+ *  （缺省 projects/<模板名>/，命令层可经 --name <目录名> 覆盖）。{{name}} 恒等于实际落地目录名。
+ *  target 已存在且非空 → 「目录已存在」（有本 CLI 生成清单时先做完整性校验，不符硬错误提示删除重跑）；
+ *  空目录放行（2.1.0 兼容）。提供 workspaceRoot 时写生成清单，供重跑校验。 */
 export async function scaffoldFromTemplate(
   repoDir: string,
-  name: string,
   templateName: string,
   target: string,
   registry: TemplateRegistry,
@@ -459,7 +438,6 @@ export async function scaffoldFromTemplate(
   const show = (t: string) =>
     path.relative(path.dirname(path.dirname(target)), t).split(path.sep).join('/');
   const st = await fs.stat(target).catch(() => null);
-  let rebuild = false;
   let replaceEmpty = false; // 已存在的空目录：放行生成（2.1.0 兼容），落盘前先移除（Windows 不能 rename 覆盖已有目录）
   if (st) {
     if (!st.isDirectory()) {
@@ -471,34 +449,26 @@ export async function scaffoldFromTemplate(
         ? await readProjectManifest(opts.workspaceRoot, path.basename(target))
         : null;
       if (manifest) {
-        if (opts.force?.all) {
-          rebuild = true; // 有本 CLI 清单 = 本 CLI 生成，允许先删后重建
-        } else {
-          const { missing, extra } = compareFiles(manifest.files, await listActualFiles(target));
-          if (missing.length > 0 || extra.length > 0) {
-            throw mismatchError(show(target), missing, extra);
-          }
-          throw new AgileError(`目录已存在：${show(target)}`);
+        const { missing, extra } = compareFiles(manifest.files, await listActualFiles(target));
+        if (missing.length > 0 || extra.length > 0) {
+          throw mismatchError(show(target), missing, extra);
         }
-      } else {
-        if (opts.force?.all) throw forceGuardError([show(target)]);
-        throw new AgileError(`目录已存在：${show(target)}`);
       }
-    } else {
-      replaceEmpty = true;
+      throw new AgileError(`目录已存在：${show(target)}`);
     }
+    replaceEmpty = true;
   }
   const src = path.join(repoDir, 'singles', templateName);
   const result = await generateWithTransaction(repoDir, src, target, {
-    '{{name}}': name,
-    '{{safeName}}': safePackageSegment(name),
+    '{{name}}': path.basename(target),
+    '{{safeName}}': safePackageSegment(path.basename(target)),
   }, {
     workspaceRoot: opts.workspaceRoot,
     dirName: path.basename(target),
-    manifestBase: { source: templateName },
-    rebuild: rebuild || replaceEmpty,
+    manifestBase: { source: templateName, member: templateName },
+    rebuild: replaceEmpty,
   });
-  return { notices: result.notices, rebuilt: rebuild };
+  return { notices: result.notices };
 }
 
 /** scaffoldSolution 的结果（core 不打印，命令层负责输出） */
@@ -507,8 +477,6 @@ export interface SolutionScaffoldResult {
   created: string[];
   /** 已存在而跳过的成员目录名（补缺语义：组合定义演进后再次 init 只补缺失成员） */
   skipped: string[];
-  /** 本次 --force 强制重建的成员目录名（先删后建） */
-  rebuilt: string[];
   /** 复制忽略通知（path 带 <成员目录名>/ 前缀，跨成员聚合），由命令层负责输出 */
   notices: CopyNotice[];
   /** 组合根耦合资产带出结果；null = 未启用清单能力（无 workspaceRoot）。
@@ -577,11 +545,11 @@ async function syncComboAssets(
  * projects/<成员目录名>/（成员目录名 = overrides[成员名] ?? 成员名，与模板/组合同命名空间、全局唯一）。
  * 成员骨架 = 仓库内 solutions/<组合名>/<成员名>/（组合专属完整模板，不引用 singles）；
  * 成员项目 {{name}} = 实际落地目录名（包名唯一性由 projects/ 平铺目录名天然保证）。
- * 已存在的成员目录：有本 CLI 生成清单 → 完整性校验（一致跳过 + warn；不符硬错误，--force 可重建）、
- * 无清单（陌生目录，含用户手写项目）→ 跳过 + warn（向后兼容，--force 拒绝重建防误删）。
+ * 已存在的成员目录：非空一律跳过 + warn——有本 CLI 生成清单时先做完整性校验（不符硬错误，
+ * 疑似上次生成残留，须删除重跑；一致 = 补缺语义，组合定义演进后可后补成员）；
+ * 无清单（陌生目录，含用户手写项目）→ 向后兼容跳过。空目录放行生成（与单例 2.1.0 兼容语义一致）。
  * 生成走同卷临时目录 + 原子替换；任一成员失败回滚本次运行新建的成员，不留残缺。
  * 全部成员成功后把组合根耦合资产（CLAUDE.md + docs/）快照到 .agile/solutions/<组合名>/（带出失败随整体回滚）。
- * init project 的 <name> 仅为输出标签，不落任何目录。
  */
 export async function scaffoldSolution(
   repoDir: string,
@@ -601,7 +569,7 @@ export async function scaffoldSolution(
   for (const [from, to] of Object.entries(overrides)) {
     if (!memberNames.has(from)) {
       throw new AgileError(
-        `--member 引用了组合中不存在的成员：${from}（可用成员：${[...memberNames].join('、') || '（无）'}）`,
+        `--name 引用了组合中不存在的成员：${from}（可用成员：${[...memberNames].join('、') || '（无）'}）`,
       );
     }
     if (!PROJECT_NAME_RE.test(to)) {
@@ -619,33 +587,12 @@ export async function scaffoldSolution(
     }
     dirOwner.set(dir, mName);
   }
-  // --force 成员名校验
-  for (const m of opts.force?.members ?? []) {
-    if (!memberNames.has(m)) {
-      throw new AgileError(
-        `--force 引用了组合中不存在的成员：${m}（可用成员：${[...memberNames].join('、') || '（无）'}）`,
-      );
-    }
-  }
 
   const displayBase = path.dirname(projectsRoot);
   const show = (t: string) => path.relative(displayBase, t).split(path.sep).join('/');
 
-  // --force 护栏预检：待重建目标中凡无本 CLI 生成清单（或清单能力未启用）的一律拒绝，防误删手写项目
-  const guarded: string[] = [];
-  for (const project of solution.projects) {
-    if (!forceApplies(opts.force, project.name)) continue;
-    const target = path.join(projectsRoot, effective.get(project.name)!);
-    const st = await fs.stat(target).catch(() => null);
-    if (!st?.isDirectory()) continue;
-    const manifest = opts.workspaceRoot ? await readProjectManifest(opts.workspaceRoot, effective.get(project.name)!) : null;
-    if (!manifest) guarded.push(show(target));
-  }
-  if (guarded.length > 0) throw forceGuardError(guarded);
-
   const created: string[] = [];
   const skipped: string[] = [];
-  const rebuilt: string[] = [];
   const notices: CopyNotice[] = [];
   const createdThisRun: string[] = []; // 回滚登记：仅本次运行替换落盘的成员
   let comboAssets: SolutionScaffoldResult['comboAssets'] = null;
@@ -654,25 +601,23 @@ export async function scaffoldSolution(
       const dir = effective.get(project.name)!;
       const target = path.join(projectsRoot, dir);
       const st = await fs.stat(target).catch(() => null);
-      let rebuild = false;
+      let replaceEmpty = false;
       if (st) {
         if (!st.isDirectory()) {
           throw new AgileError(`路径已存在且不是目录：${show(target)}（请人工处理后重跑）`);
         }
-        const manifest = opts.workspaceRoot ? await readProjectManifest(opts.workspaceRoot, dir) : null;
-        if (manifest) {
-          if (forceApplies(opts.force, project.name)) {
-            rebuild = true; // 有本 CLI 清单 = 本 CLI 生成，允许先删后重建
-          } else {
+        if ((await fs.readdir(target)).length === 0) {
+          // 空目录：放行生成（与单例 2.1.0 兼容语义一致），落盘前先移除（Windows 不能 rename 覆盖已有目录）
+          replaceEmpty = true;
+        } else {
+          // 非空目录：有本 CLI 清单先校验完整性（不符硬错误）；一致（补缺跳过）或无清单（陌生目录）均维持跳过
+          const manifest = opts.workspaceRoot ? await readProjectManifest(opts.workspaceRoot, dir) : null;
+          if (manifest) {
             const { missing, extra } = compareFiles(manifest.files, await listActualFiles(target));
             if (missing.length > 0 || extra.length > 0) {
               throw mismatchError(show(target), missing, extra);
             }
-            skipped.push(dir);
-            continue;
           }
-        } else {
-          // 无清单（陌生目录）：维持补缺跳过（--force 已在预检被拒）
           skipped.push(dir);
           continue;
         }
@@ -691,13 +636,12 @@ export async function scaffoldSolution(
         workspaceRoot: opts.workspaceRoot,
         dirName: dir,
         manifestBase: { source: solutionName, member: project.name },
-        rebuild,
+        rebuild: replaceEmpty,
       });
       // 通知 path 加成员目录前缀（组合平铺生成，warn 需定位到成员）
       for (const n of memberResult.notices) notices.push({ ...n, path: `${dir}/${n.path}` });
       createdThisRun.push(dir);
-      if (rebuild) rebuilt.push(dir);
-      else created.push(dir);
+      created.push(dir);
     }
 
     // 组合根耦合资产带出（全部成员成功后；失败抛错随上面的回滚一起不留残缺）
@@ -707,7 +651,7 @@ export async function scaffoldSolution(
       for (const n of combo.notices) notices.push(n);
     }
   } catch (e) {
-    // 事务回滚：本次运行新建/重建的成员连同清单一并移除，之前已存在被跳过的不动，不留残缺
+    // 事务回滚：本次运行新建的成员连同清单一并移除，之前已存在被跳过的不动，不留残缺
     for (const d of createdThisRun) {
       await fs.rm(path.join(projectsRoot, d), { recursive: true, force: true }).catch(() => {});
       if (opts.workspaceRoot) await deleteProjectManifest(opts.workspaceRoot, d).catch(() => {});
@@ -715,5 +659,5 @@ export async function scaffoldSolution(
     throw e;
   }
 
-  return { created, skipped, rebuilt, notices, comboAssets };
+  return { created, skipped, notices, comboAssets };
 }
