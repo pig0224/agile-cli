@@ -1,3 +1,11 @@
+## v2.4.1 (2026-09-08)
+
+> bump: patch
+
+### Fixes
+
+- fix: template list --json stale 提示改走 stderr + README 用户手册化重写 ([`a654241`](https://github.com/pig0224/agile-cli/commit/a6542413918d1c51e3ac3b9412556a43c8d3542d))
+
 ## v2.4.0 (2026-09-07)
 
 > bump: major
