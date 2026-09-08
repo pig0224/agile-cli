@@ -25,7 +25,7 @@ export const templateCommand = new Command('template')
       .action(async (opts: { json?: boolean }) => {
         const registryUrl = await resolveRegistryUrl(opts.json === true);
         const { registry, issues, stale } = await loadTemplates(registryUrl);
-        if (stale) console.log(ui.warn('模板源同步失败，使用本地缓存。'));
+        if (stale) console.error(ui.warn('模板源同步失败，使用本地缓存。'));
 
         // 机器可读输出：纯 JSON 走 stdout，人读提示（stale/issues）走 stderr
         if (opts.json) {

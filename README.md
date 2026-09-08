@@ -1,4 +1,4 @@
-# FCC-Agile-Cli
+# FCC-Agile CLI
 
 [![CI](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/ci.yml)
 [![Release](https://github.com/pig0224/agile-cli/actions/workflows/release.yml/badge.svg)](https://github.com/pig0224/agile-cli/actions/workflows/release.yml)
@@ -7,11 +7,11 @@
 
 📖 **完整文档**：https://pig0224.github.io/agile-docs/ （命令参考 / 使用流程 / 插件与模板指南）
 
-**One root, five drawers** — 一个 workspace 根 + 五个抽屉的研发工作区 CLI。
+FCC-Agile CLI（npm 包 `fcc-agile-cli`，命令名 `agile`）：初始化与管理敏捷研发工作区——公司规范、技术知识库、产品知识库、项目代码、过程产物集中一处，统一配置、统一同步。
 
-**单仓模式**：整个团队一个 git 仓库（biz-product-docs / projects / process-docs / biz-tech-docs 都是普通目录），跨模块变更一个 PR 天然原子。外部资源（公司级规范 tech-specs、团队知识库 biz-tech-docs、项目模板、Claude 插件）由 `agile sync` 统一拉取，配置集中在 `.agile/settings.json`——**tech-specs 恒不入库**（公司级规范，天然外部仓库）；**biz-tech-docs 登记为外部仓库后才不入库**（未登记 = workspace 内普通目录，随仓库提交），已登记目录各自是独立 git 仓库，本地改动优先（sync 只快进拉取，绝不覆盖本地）。
+**一个工作区，全团队共用**：跨模块变更经由一个 PR 一并提交评审。外部资源（公司级规范 tech-specs、项目模板、Claude 插件）由 `agile sync` 统一拉取，配置集中于 `.agile/settings.json`。tech-specs 始终由 sync 自动维护、不随工作区提交；团队知识库 biz-tech-docs 登记为外部资源后同样由 sync 维护（未登记时是工作区内普通目录，随工作区提交）。已登记的外部资源本地改动优先：sync 仅快进拉取，不覆盖本地改动。
 
-**本仓库只做 CLI（npm 包）**。配套的两个 git 仓库与本 CLI 解耦，扩展它们不需要本仓库发版：
+CLI 经 npm 发布；插件与模板更新后即时生效，三者独立演进：
 
 | 仓库 | 职责 |
 |---|---|
@@ -24,21 +24,21 @@
 npm install -g fcc-agile-cli
 ```
 
-> Node ≥ 24，git ≥ 2.30。插件与模板由各自 git 仓库分发，无需 npm。
+> Node ≥ 24，git ≥ 2.30
 
 ## 5 分钟上手
 
 ```bash
-# 1. 初始化工作区（.agile/settings.json + 五个抽屉骨架 + git init）
+# 1. 初始化工作区（.agile/settings.json + 五类目录骨架）
 mkdir my-workspace && cd my-workspace
 agile init workspace --name my-workspace
 
-# 2. 登记外部仓库（公司规范必选；多 workspace 团队可加登记团队知识库，目录均不入库）
+# 2. 登记外部资源（公司规范必选；多 workspace 团队可加登记团队知识库）
 agile config set tech-specs git@gitlab.corp:specs/tech-specs.git
 agile config set biz-tech-docs git@gitlab.corp:kb/tech-docs.git   # 可选：团队知识库跨 workspace 共享
-agile sync                        # 拉取外部仓库 + 模板缓存 + 插件
+agile sync                        # 拉取外部资源 + 模板缓存 + 插件
 
-# 3. 新建项目（模板来自模板注册中心 git 仓库，落 projects/ 普通目录）
+# 3. 新建项目（模板名以 template list 输出为准——官方注册中心可能尚未登记模板）
 agile template list
 agile init project --template go-service   # 缺省 --name：目录名 = go-service
 
@@ -51,46 +51,46 @@ agile plugin ls                  # 依赖声明 × 本机安装实况对照
 agile plugin install agile
 ```
 
-## 工作区结构（一个根、五个抽屉）
+## 工作区结构
 
 ```
-my-workspace/                    # 单一 git 仓库（团队）
+my-workspace/                    # 团队工作区
 ├── .gitignore                   # 忽略 .worktrees/、tech-specs/；biz-tech-docs 登记后由 sync 自动补写
 ├── .agile/
-│   └── settings.json            # 唯一配置：抽屉路径、外部仓库、插件市场与依赖声明、模板源
-├── tech-specs/                  # 抽屉一：公司级技术规范（独立 git 仓库，不入库）
-├── biz-tech-docs/               # 抽屉二：团队技术设计知识库（默认普通目录随仓库入库；config set 登记后由 sync 管理为外部仓库）
-├── biz-product-docs/            # 抽屉三：产品设计知识库（普通目录）
-├── projects/                    # 抽屉四：项目代码（普通目录，模板脚手架直接落此）
-└── process-docs/                # 抽屉五：过程产物（STO-xxx 标准任务目录，普通目录）
+│   └── settings.json            # 唯一配置：目录路径、外部资源、插件市场与依赖声明、模板源
+├── tech-specs/                  # 公司级技术规范（由 agile sync 自动维护，不随工作区提交）
+├── biz-tech-docs/               # 团队技术设计知识库（默认随工作区提交；config set 登记后由 sync 自动维护）
+├── biz-product-docs/            # 产品设计知识库
+├── projects/                    # 项目代码（模板脚手架直接落此）
+└── process-docs/                # 过程产物（STO-xxx 标准任务目录）
 ```
 
 ## 命令一览
 
 | 命令 | 说明 |
 |---|---|
-| `agile init workspace [--name <名>] [--tech-specs <url>] [--biz-tech-docs <url>] [--marketplace <url>] [--template-registry <url>]` | 初始化工作区（settings.json + 五抽屉 + git init；旧版三 yaml 自动迁移；--name 自定义 workspace 名称，缺省取目录名） |
-| `agile init project [--template <t>] [--name <目录名 \| 组合项目名称=目录名>]` | 创建项目到 projects/（--template 从单例/组合模板生成，缺省为空项目骨架且 --name 必填；--name 三模式——空骨架/单例为裸目录名、组合为 成员名=目录名 可重复，缺省用模板名/成员名；普通目录，git add） |
-| `agile sync [--dry-run]` | 拉取四类外部资源：tech-specs / biz-tech-docs 仓库（clone 或快进，本地优先）+ 模板缓存刷新 + 插件按声明安装（绝不卸载） |
-| `agile config get/set/unset <tech-specs\|biz-tech-docs\|plugin-repo\|template-repo>` | 快捷配置外部仓库与插件/模板源地址（类 npm registry 换源体验；plugin-repo/template-repo 的 unset 恢复内置官方源） |
+| `agile init workspace [--name <名>] [--tech-specs <url>] [--biz-tech-docs <url>] [--marketplace <url>] [--template-registry <url>]` | 初始化工作区（settings.json + 五类目录骨架；旧版配置自动迁移；--name 自定义 workspace 名称，缺省取目录名） |
+| `agile init project [--template <t>] [--name <目录名 \| 组合项目名称=目录名>]` | 创建项目到 projects/（--template 从单例/组合模板生成，缺省为空项目骨架且 --name 必填；--name 三模式——空骨架/单例为裸目录名、组合为 成员名=目录名 可重复，缺省用模板名/成员名） |
+| `agile sync [--dry-run]` | 拉取四类内容：外部资源 tech-specs / biz-tech-docs（本地改动优先）+ 模板缓存刷新 + 插件按声明安装（仅安装缺失项，不卸载既有安装） |
+| `agile config get/set/unset <tech-specs\|biz-tech-docs\|plugin-repo\|template-repo>` | 快捷配置外部资源与插件/模板源地址（操作方式与 npm registry 换源一致；plugin-repo/template-repo 的 unset 恢复内置官方源） |
 | `agile config list` | 查看全部配置（settings.json） |
-| `agile worktree create/list/remove` | workspace 根仓库 worktree（create 前后自动 sync；--help 有参数详述） |
+| `agile worktree create/list/remove` | 隔离开发环境管理（create 前后自动 sync；--help 有参数详述） |
 | `agile template list/update/clean` | 模板注册中心：查看（`list --json` JSON 输出）/ 刷新缓存 / 清理缓存（源 = settings.json templates.registry） |
-| `agile plugin install/uninstall/update/ls` | 插件管理（类 npm：install/uninstall 同时维护 settings.json 依赖声明；update 刷新市场并强制重装；ls 声明 × 实况对照） |
+| `agile plugin install/uninstall/update/ls` | 插件管理（操作方式与 npm 一致：install/uninstall 同时维护 settings.json 依赖声明；update 刷新市场并强制重装；ls 声明 × 实况对照） |
 | `agile update` | CLI 自更新（npm） |
 | `agile version` | 查看当前 CLI 版本（同 `--version`） |
 
-> 私有源：`agile config set plugin-repo <git-url>` / `agile config set template-repo <git-url>` 一键切换内网镜像（落点 settings.json 的 `plugins.marketplace` / `templates.registry`，也可手改；`config unset` 恢复内置官方源）。
+> 私有源：`agile config set plugin-repo <git-url>` / `agile config set template-repo <git-url>` 切换内网镜像（落点 settings.json 的 `plugins.marketplace` / `templates.registry`，也可手改；`config unset` 恢复内置官方源）。
 
-> workspace 外降级：查询类命令不要求 workspace——`config get`/`config list` 显示内置官方默认，`template list`/`template update` 用内置官方模板源（模板缓存用户级，跨 workspace 共享），`plugin ls` 仅显示本机安装实况。写操作类（`config set/unset`、`sync`、`worktree`、`init project`）必须在工作区内执行，否则报错提示。
+> workspace 外降级：查询类命令不要求 workspace——`config get`/`config list` 显示内置官方默认，`template list`/`template update` 用内置官方模板源（模板缓存本机所有 workspace 共用），`plugin ls` 仅显示本机安装实况。写操作类（`config set/unset`、`sync`、`worktree`、`init project`）必须在工作区内执行，否则报错提示。
 
 ## 自动同步
 
-`agile worktree create` 创建开发环境**前后各自动执行一次 sync**（主仓拉外部资源；worktree 内因外部仓库不入库需独立 clone，失败仅警告不阻塞）。日常场景也可手动 `agile sync`（幂等）。
+`agile worktree create` 创建开发环境**前后各自动执行一次 sync**（主工作区拉取外部资源；新环境内需重新拉取，失败仅警告不阻塞）。日常场景也可手动 `agile sync`（幂等）。
 
 ## AI 集成
 
-无 MCP Server——AI（Claude Code 等）直接经 Bash 调用 CLI 全部能力（`agile sync` / `agile config list` / `agile worktree create` …），输出即面向人机双读设计。任务目录（STO-xxx 七文件）由 Claude Code 插件命令 `/agile:sync-req`、`/agile:fix-bug` 等按 sdd-tdd-method SKILL 附录模板直接创建。
+CLI 不提供 MCP Server：AI（Claude Code 等）直接经 Bash 调用全部命令（`agile sync` / `agile config list` / `agile worktree create` …）。任务目录（STO-xxx，初始 8 个 .md）由 Claude Code 插件命令 `/agile:sync-req`、`/agile:fix-bug` 等按 sdd-tdd-method SKILL 附录模板创建。
 
 ## 开发
 
