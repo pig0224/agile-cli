@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { execa } from 'execa';
-import { buildChangelogSection, suggestBump } from './lib/changelog.mjs';
+import { buildChangelogSection, bumpTypeBetween, suggestBump } from './lib/changelog.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PKG_FILE = path.join(ROOT, 'package.json');
@@ -223,7 +223,11 @@ async function main() {
 
   // ---------- 4. CHANGELOG 段落预览 ----------
   const commitUrl = `https://github.com/${repo.owner}/${repo.repo}/commit/`;
-  const section = buildChangelogSection(next, new Date().toISOString().slice(0, 10), commits, { commitUrl });
+  // bump 标签以实际发版版本差值为准（人工指定版本时与提交推导的建议值可能不同）
+  const section = buildChangelogSection(next, new Date().toISOString().slice(0, 10), commits, {
+    commitUrl,
+    bumpType: bumpTypeBetween(current, next),
+  });
   log('');
   log(section);
   log('');

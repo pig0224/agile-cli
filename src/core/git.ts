@@ -33,20 +33,10 @@ export async function git(cwd: string, args: string[], timeoutMs?: number): Prom
   return r.stdout;
 }
 
-/** 判断目录是否为 git 仓库（含 worktree / submodule） */
-export async function isGitRepo(dir: string): Promise<boolean> {
-  const r = await gitTry(dir, ['rev-parse', '--git-dir']);
-  return r.ok;
-}
-
 /** 当前分支名；detached HEAD 时返回 '(detached)' */
 export async function currentBranch(cwd: string): Promise<string> {
   const out = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
   return out || '(detached)';
-}
-
-export async function currentCommit(cwd: string): Promise<string> {
-  return git(cwd, ['rev-parse', 'HEAD']);
 }
 
 /** 工作区是否有未提交改动（含 untracked） */
@@ -55,15 +45,23 @@ export async function isDirty(cwd: string): Promise<boolean> {
   return out.length > 0;
 }
 
-/** 探测远端可达性 / 权限：git ls-remote --heads <url> */
-export async function checkRemote(url: string, timeoutMs = 15_000): Promise<GitResult> {
-  // ls-remote 不依赖本地仓库，cwd 用任意目录即可
-  return gitTry(process.cwd(), ['ls-remote', '--heads', url], timeoutMs);
+/** worktree 分支名 → 存放目录名：/ 与 \ 转写为 __（feature/STO-001 → feature__STO-001） */
+export function worktreeDirName(branch: string): string {
+  return branch.replace(/[/\\]/g, '__');
 }
 
-export function parseGitUrlName(url: string): string {
-  // git@gitlab.example.com:group/repo.git / https://host/group/repo.git / 本地路径
-  const cleaned = url.replace(/\\/g, '/').replace(/\.git$/, '');
-  const last = cleaned.split('/').pop() ?? cleaned;
-  return last.split(':').pop() ?? last;
+/** 解析 `git worktree list --porcelain` 输出：每个 worktree 一个 { path, branch }；
+ *  branch 为 null 表示 detached HEAD / bare。保持输出顺序。 */
+export function parseWorktreeList(output: string): Array<{ path: string; branch: string | null }> {
+  const out: Array<{ path: string; branch: string | null }> = [];
+  for (const block of output.split('\n\n')) {
+    let p: string | null = null;
+    let b: string | null = null;
+    for (const line of block.split('\n')) {
+      if (line.startsWith('worktree ')) p = line.slice('worktree '.length);
+      else if (line.startsWith('branch refs/heads/')) b = line.slice('branch refs/heads/'.length);
+    }
+    if (p) out.push({ path: p, branch: b });
+  }
+  return out;
 }

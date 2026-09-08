@@ -112,4 +112,31 @@ describe('copyAndSubstitute（模板复制 walker：产物忽略 + 符号链接�
     await expect(fs.stat(path.join(dest, 'proj', 'src', 'node_modules'))).rejects.toThrow();
     expect(notices.map((n) => n.path)).toEqual(['src/node_modules']);
   });
+
+  it('脚本类扩展名（.sh/.bat/.ps1）文本文件参与占位符替换', async () => {
+    const [src, dest] = [await tmp(), await tmp()];
+    await fs.writeFile(path.join(src, 'run.sh'), '#!/bin/sh\necho {{name}}', 'utf8');
+    await fs.writeFile(path.join(src, 'setup.bat'), 'echo {{name}}', 'utf8');
+    await fs.writeFile(path.join(src, 'bootstrap.ps1'), 'Write-Host "{{name}}"', 'utf8');
+
+    const { files } = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'demo' });
+
+    expect(await fs.readFile(path.join(dest, 'proj', 'run.sh'), 'utf8')).toBe('#!/bin/sh\necho demo');
+    expect(await fs.readFile(path.join(dest, 'proj', 'setup.bat'), 'utf8')).toBe('echo demo');
+    expect(await fs.readFile(path.join(dest, 'proj', 'bootstrap.ps1'), 'utf8')).toBe('Write-Host "demo"');
+    expect(files.sort()).toEqual(['bootstrap.ps1', 'run.sh', 'setup.bat']);
+  });
+
+  it('无扩展名二进制文件（含 NUL/0xFF）按二进制原样复制，占位符不做替换', async () => {
+    const [src, dest] = [await tmp(), await tmp()];
+    // 内容含 "{{name}}" 字节序列，但 0xFF 非法 UTF-8 → 必须走二进制 copyFile，避免误替换损坏文件
+    const bin = Buffer.from([0x4c, 0x00, 0xff, 0xfe, 0x7b, 0x7b, 0x6e, 0x61, 0x6d, 0x65, 0x7d, 0x7d]);
+    await fs.writeFile(path.join(src, 'blob'), bin);
+
+    const { files } = await copyAndSubstitute(src, path.join(dest, 'proj'), { '{{name}}': 'demo' });
+
+    const out = await fs.readFile(path.join(dest, 'proj', 'blob'));
+    expect(out.equals(bin)).toBe(true);
+    expect(files).toEqual(['blob']);
+  });
 });

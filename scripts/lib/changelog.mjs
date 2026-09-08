@@ -70,17 +70,29 @@ function bumpTypeOfSection(commits) {
   return 'patch';
 }
 
+/** 依据实际发版版本差值推导 bump 类型：CHANGELOG 的 `> bump:` 标签以真实版本为准，
+ *  不按提交重推（人工指定版本/覆盖建议时两者会脱节，标签误导读者）。 */
+export function bumpTypeBetween(prev, next) {
+  const [pm, pn] = prev.split('.').map(Number);
+  const [nm, nn] = next.split('.').map(Number);
+  if (nm !== pm) return 'major';
+  if (nn !== pn) return 'minor';
+  return 'patch';
+}
+
 /**
  * 渲染一个版本的 CHANGELOG 段落（Markdown）。
  * @param {object} opts
  * @param {string} [opts.commitUrl] commit 链接前缀（如 https://github.com/owner/repo/commit/），
  *        提供时 hash 渲染为可点击链接（npmjs.com 渲染 CHANGELOG 不会自动链接裸 SHA）
+ * @param {string} [opts.bumpType] 显式 bump 标签（发版时传实际版本差值 bumpTypeBetween(current, next)）；
+ *        缺省按提交类型推导（兼容旧调用）
  * @returns {string} 形如 "## v1.1.0 (2026-09-04)\n\n### ..." 的段落（以空行结尾）
  */
 export function buildChangelogSection(version, date, commits, opts = {}) {
   const parsed = parseCommits(commits);
   if (parsed.length === 0) return '';
-  const bumpType = bumpTypeOfSection(parsed);
+  const bumpType = opts.bumpType ?? bumpTypeOfSection(parsed);
   const commitUrl = opts.commitUrl;
   const item = (c) => {
     const short = c.sha.slice(0, 7);

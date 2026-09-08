@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommits, suggestBump, buildChangelogSection } from '../scripts/lib/changelog.mjs';
+import { parseCommits, suggestBump, buildChangelogSection, bumpTypeBetween } from '../scripts/lib/changelog.mjs';
 
 const commits = [
   { sha: 'aaa1111222233334444455556666777788889999', subject: 'feat: 支持 .tmpl 模板后缀', body: '' },
@@ -94,5 +94,21 @@ describe('buildChangelogSection', () => {
 
   it('空提交返回空串', () => {
     expect(buildChangelogSection('1.0.0', '2026-09-04', [])).toBe('');
+  });
+
+  it('显式 bumpType 覆盖按提交推导的标签（发版时传实际版本差值）', () => {
+    // 提交含 feat（推导 minor），但人工指定了 patch 版本 → 标签以实际差值为准
+    const md = buildChangelogSection('1.0.1', '2026-09-08', [commits[0]!], { bumpType: 'patch' });
+    expect(md).toContain('> bump: patch');
+    expect(md).not.toContain('> bump: minor');
+  });
+});
+
+describe('bumpTypeBetween', () => {
+  it('按版本段差值推导：major 段不同 → major，minor 段不同 → minor，否则 patch', () => {
+    expect(bumpTypeBetween('2.3.0', '2.4.0')).toBe('minor');
+    expect(bumpTypeBetween('2.3.0', '3.0.0')).toBe('major');
+    expect(bumpTypeBetween('2.3.0', '2.3.1')).toBe('patch');
+    expect(bumpTypeBetween('2.3.0', '2.3.0')).toBe('patch'); // 同版本（发版脚本已另行拦截，此处仅兜底）
   });
 });

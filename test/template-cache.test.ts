@@ -70,9 +70,11 @@ describe('ensureTemplateRepo 缓存/刷新语义', () => {
     await expect(fs.readFile(path.join(templateCacheDir(url), 'registry.json'), 'utf8')).resolves.toContain('"version":2');
   });
 
-  it('无缓存且上游不可达 → 报错', { timeout: 60_000 }, async () => {
+  it('无缓存且上游不可达 → 报错，且不残留半成品缓存目录', { timeout: 60_000 }, async () => {
     const url = path.join(os.tmpdir(), `agile-nope-${Date.now()}`, 'tpl.git').replace(/\\/g, '/');
     await expect(ensureTemplateRepo(url)).rejects.toThrow(/克隆失败/);
+    // 半成品目录必须已清理（M3：clone 失败自愈，重试不被脏目录卡死）
+    await expect(fs.stat(templateCacheDir(url))).rejects.toThrow();
   });
 });
 

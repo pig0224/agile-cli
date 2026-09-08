@@ -6,7 +6,7 @@ import { findWorkspaceRoot, requireWorkspaceRoot } from '../src/core/paths.js';
 import { loadSettings, saveSettings } from '../src/core/config.js';
 import { SettingsSchema } from '../src/core/schemas.js';
 import { AgileError } from '../src/core/errors.js';
-import { assertProjectName, scaffoldEmptyProject } from '../src/core/scaffold.js';
+import { scaffoldEmptyProject, workspaceClaudeMdContent } from '../src/core/scaffold.js';
 
 function tmp(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'agile-test-'));
@@ -105,18 +105,6 @@ describe('config 读写', () => {
 });
 
 describe('scaffold', () => {
-  it('assertProjectName：合法名通过，路径穿越/大写/空格/空名拒绝', () => {
-    expect(() => assertProjectName('order-service')).not.toThrow();
-    expect(() => assertProjectName('demo1')).not.toThrow();
-    expect(() => assertProjectName('../evil')).toThrow(AgileError);
-    expect(() => assertProjectName('a/b')).toThrow(AgileError);
-    expect(() => assertProjectName('a\\b')).toThrow(AgileError);
-    expect(() => assertProjectName('Order')).toThrow(AgileError);
-    expect(() => assertProjectName('a b')).toThrow(AgileError);
-    expect(() => assertProjectName('.')).toThrow(AgileError);
-    expect(() => assertProjectName('')).toThrow(AgileError);
-  });
-
   it('scaffoldEmptyProject 生成空项目骨架（仅 README，含项目名）', async () => {
     const dir = await tmp();
     const dest = path.join(dir, 'projects', 'my-lib');
@@ -126,5 +114,24 @@ describe('scaffold', () => {
     const readme = await fs.readFile(path.join(dest, 'README.md'), 'utf8');
     expect(readme).toContain('# my-lib');
     expect(readme).toContain('空项目骨架');
+  });
+
+  it('workspaceClaudeMdContent：五类目录表按实际路径渲染 + 项目导航指针', () => {
+    const md = workspaceClaudeMdContent('demo-ws', {
+      techSpecs: 'specs',
+      bizTechDocs: 'kb',
+      bizProductDocs: 'prd',
+      projects: 'code',
+      processDocs: 'process',
+    });
+    expect(md).toContain('# CLAUDE.md — demo-ws');
+    expect(md).toContain('| specs/ |');
+    expect(md).toContain('| kb/ |');
+    expect(md).toContain('| code/ |');
+    expect(md).toContain('| process/ |');
+    // 导航不复制事实源：目录详情指向抽屉 README，项目细节指向项目级 CLAUDE.md
+    expect(md).toContain('code/<项目>/CLAUDE.md');
+    expect(md).toContain('无 design.md 不开发');
+    expect(md).toContain('.agile/settings.json');
   });
 });

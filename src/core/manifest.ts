@@ -40,7 +40,17 @@ export async function writeProjectManifest(
 ): Promise<void> {
   const file = manifestPath(workspaceRoot, manifest.dirName);
   await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  // 原子写：先写同目录临时文件再 rename，写盘中断不会留下坏 JSON
+  // （坏清单会被 readProjectManifest 降级成「陌生目录」，重跑防护静默失效）
+  const tmp = `${file}.tmp`;
+  await fs.writeFile(tmp, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  try {
+    await fs.rename(tmp, file);
+  } catch {
+    // rename 异常（如 Windows 下文件被瞬时占用）降级为直写，保持旧行为
+    await fs.writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await fs.rm(tmp, { force: true }).catch(() => {});
+  }
 }
 
 /** 读清单：文件缺失 / 损坏 JSON / 结构不合法一律返回 null（按陌生目录处理，不因清单本身异常阻断） */

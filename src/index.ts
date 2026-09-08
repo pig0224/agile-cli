@@ -40,9 +40,10 @@ try {
   if (e instanceof AgileError || e instanceof GitError) {
     console.error(pc.red(`✖ ${e.message}`));
     process.exitCode = 1;
-  } else if ((e as Error).message?.includes('unknown command')) {
-    console.error(pc.red(`✖ ${(e as Error).message}`));
-    process.exitCode = 1;
+  } else if ((e as Error).name === 'CommanderError') {
+    // commander 对 unknown command / unknown option / 缺参数已向 stderr 打印 error: ... 并设置 exitCode——
+    // 直接退出即可：不重复打印，更不能重抛刷堆栈
+    process.exitCode = (e as { exitCode?: number }).exitCode ?? 1;
   } else {
     throw e;
   }

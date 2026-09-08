@@ -5,6 +5,18 @@ import { cliVersion } from '../version.js';
 
 const PKG = 'fcc-agile-cli';
 
+/** semver（x.y.z）比较：a 严格大于 b 时为 true（防 npm latest 回滚/异常旧版触发降级安装） */
+function isNewer(a: string, b: string): boolean {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
 /** 查询 npm registry 上最新版本 */
 async function latestFromNpm(): Promise<string | null> {
   try {
@@ -27,6 +39,10 @@ export const updateCommand = new Command('update')
     }
     if (latest === cliVersion) {
       console.log(ui.ok('CLI 已是最新版本。'));
+      return;
+    }
+    if (!isNewer(latest, cliVersion)) {
+      console.log(ui.warn(`npm 上的最新版本（${latest}）不高于当前版本（${cliVersion}），跳过自更新（避免降级）`));
       return;
     }
     console.log(ui.info(`发现新版本：${latest}，执行自更新…`));

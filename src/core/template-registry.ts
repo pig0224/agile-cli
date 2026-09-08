@@ -123,8 +123,10 @@ export async function ensureTemplateRepo(
     await fs.mkdir(dir, { recursive: true });
     const clone = await gitTry(dir, ['-c', 'protocol.file.allow=always', 'clone', '--depth', '1', url, '.']);
     if (!clone.ok) {
+      // 半成品缓存目录必须清掉：残留的非空内容会让该源此后 clone 进非空目录，永远失败且无出路
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
       throw new AgileError(
-        `模板仓库克隆失败（${url}）：${clone.stderr.split('\n')[0] ?? '未知错误'}`,
+        `模板仓库克隆失败（${url}）：${clone.stderr.split('\n')[0] ?? '未知错误'}（已清理半成品缓存，可重试）`,
       );
     }
     return { repoDir: dir, stale: false };
@@ -137,7 +139,10 @@ export async function ensureTemplateRepo(
 
   const pull = await gitTry(dir, ['-c', 'protocol.file.allow=always', 'fetch', 'origin']);
   if (pull.ok) {
-    await git(dir, ['reset', '--hard', 'FETCH_HEAD']);
+    // reset 到 origin/<当前分支> 而非 FETCH_HEAD：远端默认分支改名/切换时 FETCH_HEAD 会把缓存内容换成别的分支
+    const br = await gitTry(dir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const branch = br.ok && br.stdout && br.stdout !== 'HEAD' ? br.stdout : null;
+    await git(dir, ['reset', '--hard', branch ? `origin/${branch}` : 'FETCH_HEAD']);
     return { repoDir: dir, stale: false };
   }
   // 刷新失败：降级使用缓存
@@ -150,7 +155,8 @@ export async function ensureTemplateRepo(
  * 2. 登记唯一：singles / solutions / 同组合 projects 数组内 name 不得重复（JSON 数组无键唯一性保证，须显式校验）
  * 3. 目录存在：单例 = singles/<name>/，成员项目 = solutions/<组合>/<name>/（组合专属完整模板骨架）
  * 4. 三段全局唯一：模板名/组合名/成员项目名互不重名——init 后全部平铺落盘 projects/，同一命名空间
- * 5. 双向一致：solutions/<组合>/ 下子目录必须全部登记进该组合的 projects（防幽灵成员目录）；
+ * 5. 双向一致：singles/ 下实际目录必须全部登记进 registry 的 singles（防幽灵单例目录）；
+ *    solutions/<组合>/ 下子目录必须全部登记进该组合的 projects（防幽灵成员目录）；
  *    docs/ 豁免（组合根耦合资产目录：CLAUDE.md + docs/ 归总跨成员约定与规范，init 时带出到 .agile/solutions/<组合>/）
  */
 export async function validateTemplateRepo(
@@ -174,6 +180,20 @@ export async function validateTemplateRepo(
     singleNames.add(entry.name);
     if (!(await isDir(path.join(repoDir, 'singles', entry.name)))) {
       issues.push(`单例模板 ${entry.name} 的目录不存在：singles/${entry.name}/`);
+    }
+  }
+
+  // 反向一致性：singles/ 下的目录必须全部登记（防幽灵单例目录——目录存在但未登记时
+  // 会被静默忽略：template list 看不见、init 用不了，维护者还以为模板已生效）。
+  // 反向比对用「全部登记名」（含不合法名）：不合法名已有专属 issue，不在这里重复报
+  const declaredSingles = new Set(registry.singles.map((e) => e.name));
+  const singlesDir = path.join(repoDir, 'singles');
+  if (await isDir(singlesDir)) {
+    for (const ent of await fs.readdir(singlesDir, { withFileTypes: true })) {
+      if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+      if (!declaredSingles.has(ent.name)) {
+        issues.push(`目录 singles/${ent.name}/ 未登记进 registry.json 的 singles（登记与目录须双向一致）`);
+      }
     }
   }
 
@@ -480,7 +500,8 @@ export interface SolutionScaffoldResult {
   /** 复制忽略通知（path 带 <成员目录名>/ 前缀，跨成员聚合），由命令层负责输出 */
   notices: CopyNotice[];
   /** 组合根耦合资产带出结果；null = 未启用清单能力（无 workspaceRoot）。
-   *  present = 模板组合根是否带有耦合资产（CLAUDE.md 或 docs/）；copied = 本次是否实际复制（快照已存在则 false）。 */
+   *  present = 模板组合根带有实际可复制的耦合资产内容（非符号链接；本次复制或既有快照 ≥1 文件）；
+   *  copied = 本次是否实际复制了内容（files > 0；快照已存在或组合根无实内容均 false）。 */
   comboAssets: { present: boolean; copied: boolean; files: number } | null;
 }
 
@@ -516,7 +537,7 @@ async function syncComboAssets(
   } else if (docs?.isDirectory()) {
     pieces.push({ kind: 'dir', src: path.join(solDir, 'docs'), dest: path.join(dest, 'docs'), rel: `solutions/${solutionName}/docs/` });
   }
-  if (pieces.length === 0) return { present: notices.length > 0, copied: false, files: 0, notices };
+  if (pieces.length === 0) return { present: false, copied: false, files: 0, notices };
   if (await lstat(dest)) return { present: true, copied: false, files: 0, notices }; // 快照已存在：跳过不覆盖
 
   let files = 0;
@@ -536,6 +557,12 @@ async function syncComboAssets(
   } catch (e) {
     await fs.rm(dest, { recursive: true, force: true }).catch(() => {});
     throw e;
+  }
+  if (files === 0) {
+    // 组合根资产实际无内容（如 docs/ 只有空子目录）：清掉刚建的空快照目录，不视为已带出——
+    // 否则命令层会输出「快照已存在」而磁盘上什么都没有
+    await fs.rm(dest, { recursive: true, force: true }).catch(() => {});
+    return { present: false, copied: false, files: 0, notices };
   }
   return { present: true, copied: true, files, notices };
 }

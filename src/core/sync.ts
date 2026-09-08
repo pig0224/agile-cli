@@ -98,12 +98,15 @@ async function gitignoreCovers(root: string, relDir: string): Promise<boolean> {
   return gi.split(/\r?\n/).map((l) => l.trim()).includes(target);
 }
 
-/** 向 workspace 根 .gitignore 幂等追加一行（relDir → `<relDir>/`）；写失败返回 false 交人工 */
+/** 向 workspace 根 .gitignore 幂等追加一行（relDir → `<relDir>/`）；
+ *  文件不存在时创建；追加行跟随既有文件的换行风格（CRLF 文件不产生混合换行）；写失败返回 false 交人工 */
 async function appendGitignore(root: string, relDir: string): Promise<boolean> {
   const giPath = path.join(root, '.gitignore');
   try {
-    const gi = await fs.readFile(giPath, 'utf8');
-    await fs.writeFile(giPath, `${gi.replace(/\n*$/, '\n')}${relDir.replace(/\\/g, '/')}/\n`, 'utf8');
+    const gi = await fs.readFile(giPath, 'utf8').catch(() => '');
+    const eol = gi.includes('\r\n') ? '\r\n' : '\n';
+    const line = `${relDir.replace(/\\/g, '/')}/`;
+    await fs.writeFile(giPath, gi === '' ? `${line}${eol}` : `${gi.replace(/\r?\n*$/, eol)}${line}${eol}`, 'utf8');
     return true;
   } catch {
     return false;

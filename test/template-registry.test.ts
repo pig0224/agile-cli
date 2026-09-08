@@ -215,6 +215,15 @@ describe('validateTemplateRepo', () => {
     const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }, { name: 'vue3-vite' }]);
     expect((await validateTemplateRepo(repoDir, registry)).join('\n')).toContain('重复登记');
   });
+
+  it('幽灵单例目录（singles/ 下目录未登记）→ 报错；点开头目录豁免', async () => {
+    const { repoDir, registry } = await makeRepo([{ name: 'vue3-vite' }]);
+    await writePkgPlaceholder(path.join(repoDir, 'singles', 'ghost-single'));
+    await fs.mkdir(path.join(repoDir, 'singles', '.staging'), { recursive: true });
+    const issues = await validateTemplateRepo(repoDir, registry);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain('singles/ghost-single/ 未登记');
+  });
 });
 
 describe('scaffoldFromTemplate', () => {

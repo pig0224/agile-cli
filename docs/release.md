@@ -16,7 +16,7 @@ npm run release -- patch --dry-run   # 演练，不实际执行
 1. 前置检查：工作区干净 / 在 main / 与 origin 同步 / 目标 tag 不存在
 2. 质量门：typecheck + test + build（与 CI 同款）
 3. **CHANGELOG 自动生成**：收集自上个 tag 以来的提交，按 Conventional Commits 分组
-   （Features / Bug Fixes / Breaking Changes / Other；Dependabot 的 `chore(deps)` 条目自动排除），
+   （Features / Fixes / Breaking Changes / Other；Dependabot 的 `chore(deps)` 条目自动排除），
    并依据提交类型建议版本号（feat→minor、fix→patch、breaking→major）
 4. 写入 CHANGELOG.md → bump package.json → `chore(release): vX.Y.Z` commit → 打 tag → 推送
 5. 提交后自检：HEAD 内 package.json 版本必须等于目标版本（防 tag 与版本脱节）
@@ -51,5 +51,5 @@ push 后由 release.yml 完成：validate（质量门）→ publish（发 npm �
 ## 4. 发版 checklist
 
 - [x] GitHub 仓库创建、代码推送、`NPM_TOKEN` secret 配置、默认地址替换
-- [x] v1.0.0 ~ v2.2.0 已发布（最新 v2.2.0）
+- [x] v1.0.0 ~ v2.4.1 已发布（最新 v2.4.1）
 - [ ] 后续发版：`npm run release` → release.yml validate/publish 全绿 → 验证 npm 版本与文档站

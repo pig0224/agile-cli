@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { AgileError } from './errors.js';
 
 /** java 包名安全段：小写字母数字，非法字符折叠 */
 export function safePackageSegment(name: string): string {
@@ -13,19 +12,12 @@ export function safePackageSegment(name: string): string {
  *  必须在这些位置都合法；同时杜绝路径穿越（/ \ .. 等）。 */
 export const PROJECT_NAME_RE = /^[a-z][a-z0-9-]*$/;
 
-/** 校验项目名，不合法抛出中文错误（init project 使用） */
-export function assertProjectName(name: string): void {
-  if (!PROJECT_NAME_RE.test(name)) {
-    throw new AgileError(
-      `项目名不合法（格式 ^[a-z][a-z0-9-]*$，仅小写字母/数字/连字符——项目名同时用作目录名、npm 包名与 go module）：${name}`,
-    );
-  }
-}
-
 const TEXT_EXT = new Set([
-  '.json', '.ts', '.tsx', '.js', '.jsx', '.vue', '.html', '.md',
-  '.yml', '.yaml', '.mod', '.go', '.java', '.xml', '.properties',
-  '.mjs', '.css', '.cjs',
+  '.json', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue',
+  '.html', '.htm', '.md', '.css', '.scss', '.less', '.ejs', '.hbs', '.pug',
+  '.yml', '.yaml', '.toml', '.ini', '.cfg', '.conf', '.xml', '.properties',
+  '.mod', '.go', '.java', '.gradle', '.kt', '.kts', '.py', '.sql',
+  '.sh', '.bash', '.bat', '.cmd', '.ps1', '.proto',
 ]);
 
 /** 复制忽略通知：path 相对模板根（统一 / 分隔）；
@@ -113,9 +105,16 @@ async function walkCopy(
       const isText =
         TEXT_EXT.has(ext) || !ext || entry.name === 'Makefile' || entry.name === '.gitignore';
       if (isText) {
-        let content = await fs.readFile(s, 'utf8');
-        for (const [k, v] of Object.entries(vars)) content = content.replaceAll(k, v);
-        await fs.writeFile(d, content, 'utf8');
+        const buf = await fs.readFile(s);
+        // 二进制防御：文本判定清单不可能穷尽（且无扩展名文件恒按文本处理）——
+        // 含 NUL 字节或 UTF-8 解码出现 U+FFFD 视为二进制，原样复制不替换，防文本重写损坏字节内容
+        if (buf.includes(0) || buf.toString('utf8').includes('�')) {
+          await fs.copyFile(s, d);
+        } else {
+          let content = buf.toString('utf8');
+          for (const [k, v] of Object.entries(vars)) content = content.replaceAll(k, v);
+          await fs.writeFile(d, content, 'utf8');
+        }
       } else {
         await fs.copyFile(s, d);
       }
@@ -135,4 +134,54 @@ export async function scaffoldEmptyProject(dest: string, name: string): Promise<
     `# ${name}\n\n空项目骨架（\`agile init project\` 未指定 --template）。\n后续可用 \`agile init project\` 配合模板迁移，或直接在此按团队规范补充代码与文档。\n`,
     'utf8',
   );
+}
+
+/** workspace 根 CLAUDE.md 导航地图内容（`init workspace` 生成；纯函数便于单测）。
+ *  定位是「导航」而非文档：五类目录表（按 settings.paths 实际路径）+ 配置/清单指针 + 常用命令 + AI 会话须知，
+ *  细节指向各抽屉 README 与项目级 CLAUDE.md，避免双份事实源。 */
+export function workspaceClaudeMdContent(
+  name: string,
+  paths: {
+    techSpecs: string;
+    bizTechDocs: string;
+    bizProductDocs: string;
+    projects: string;
+    processDocs: string;
+  },
+): string {
+  return `# CLAUDE.md — ${name}（agile workspace 导航）
+
+> 本文件由 \`agile init workspace\` 生成，作为 AI 会话的工作区导航地图，随仓库提交（团队共享）。手工维护后 CLI 不会覆盖；各目录详情见其下 README.md。
+
+## 目录导航（五类目录，路径可在 .agile/settings.json 调整）
+
+| 目录 | 角色 | 版本管理 |
+|---|---|---|
+| ${paths.techSpecs}/ | 抽屉一：公司级技术规范（独立 git 仓库） | 不入库（.gitignore 忽略），agile sync 拉取 |
+| ${paths.bizTechDocs}/ | 抽屉二：团队技术设计知识库 | 默认随仓库提交；登记为外部仓库后不入库（sync 管理） |
+| ${paths.bizProductDocs}/ | 抽屉三：产品设计知识库（PRD / AC / 功能树） | 随仓库提交 |
+| ${paths.projects}/ | 抽屉四：团队项目代码（单例与组合成员平铺） | 随仓库提交 |
+| ${paths.processDocs}/ | 抽屉五：需求过程文档（STO-xxx / BUG-xxx / OPS-xxx） | 随仓库提交 |
+
+## 配置与清单
+
+- 唯一配置：\`.agile/settings.json\`（目录路径 / 外部仓库 / 插件依赖 / 模板源）
+- 项目生成清单：\`.agile/manifests/<项目目录名>.json\`（重跑防护与出身盘点依据）
+- 组合模板耦合资产快照：\`.agile/solutions/<组合名>/\`
+
+## 常用命令
+
+| 命令 | 用途 |
+|---|---|
+| \`agile sync\` | 拉取外部仓库 + 刷新模板缓存 + 按声明安装插件（幂等） |
+| \`agile init project --template <模板> [--name ...]\` | 创建项目（缺省 --template 为空项目骨架） |
+| \`agile worktree create / remove <分支>\` | 并行开发环境（前后自动 sync） |
+| \`agile plugin install agile\` / \`agile plugin ls\` | 安装 / 查看 Claude Code 插件 |
+
+## AI 会话须知
+
+- 斜杠命令（/agile:init、/agile:sync-req、/agile:fix-bug 等）来自 agile 插件：\`/agile:help\` 查看全部
+- 需求流程遵循 sdd-tdd-method SKILL：无 design.md 不开发；无失败测试不写实现
+- 单个项目的技术栈与约定见 \`${paths.projects}/<项目>/CLAUDE.md\`（项目导航）
+`;
 }

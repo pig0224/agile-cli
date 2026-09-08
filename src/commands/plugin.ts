@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import pc from 'picocolors';
 import { DEFAULT_PLUGIN_MARKETPLACE, findWorkspaceRoot } from '../core/paths.js';
 import { loadSettings, saveSettings } from '../core/config.js';
 import { MARKETPLACE_NAME, planPluginSync, readInstalledClaudePlugins, runClaude } from '../core/claude-plugins.js';
@@ -128,7 +129,8 @@ export const pluginCommand = new Command('plugin')
         await runClaude(['plugin', 'uninstall', pluginId]);
         const install = await runClaude(['plugin', 'install', pluginId]);
         if (install.exitCode !== 0) {
-          console.log(ui.warn(`重装插件 ${pluginId} 失败，请手动执行：claude plugin install ${pluginId}`));
+          // uninstall 已先行执行：此刻旧版已卸载而新版未装上，必须明说，不能让用户以为还是可用原状
+          console.log(ui.warn(`重装插件 ${pluginId} 失败（旧版已卸载，当前未安装），请手动执行：claude plugin install ${pluginId}`));
           console.log(ui.dim(`失败原因：${(install.stderr || install.stdout || '').split('\n')[0]}`));
           process.exitCode = 1;
           return;
@@ -169,15 +171,16 @@ export const pluginCommand = new Command('plugin')
         }
         for (const action of plan.actions) {
           if (action.kind === 'skip') {
-            console.log(`  ${ui.ok('✓')} ${action.pluginId}${ui.dim('（已安装）')}`);
+            // 状态标记用单符号（✔/⚠）：ui.ok/ui.warn 自带前缀，包符号会渲染成双标记
+            console.log(`  ${pc.green('✔')} ${action.pluginId}${ui.dim('（已安装）')}`);
           } else if (action.kind === 'conflict') {
             console.log(
-              `  ${ui.warn('✖')} ${action.name}${ui.warn(
+              `  ${pc.yellow('⚠')} ${action.name}${ui.warn(
                 `：声明来自市场 ${action.declaredMarketplace}，本机来自 ${action.installedMarketplace}（${action.installedPluginId}）——切换：claude plugin uninstall ${action.installedPluginId} 后 agile sync`,
               )}`,
             );
           } else {
-            console.log(`  ${ui.warn('○')} ${action.pluginId}${ui.warn('（未安装；agile sync 或 claude plugin install ' + action.pluginId + '）')}`);
+            console.log(`  ${pc.yellow('○')} ${action.pluginId}${ui.warn('（未安装；agile sync 或 claude plugin install ' + action.pluginId + '）')}`);
           }
           if (dependencies[action.name]?.ref) {
             console.log(ui.warn(`      ${action.name} 声明了版本锁定（ref）——锁定安装暂未实现，按市场最新安装`));

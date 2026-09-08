@@ -13,6 +13,7 @@
 
 ```
 workspace/                  # 单一 git 仓库（团队）
+├── CLAUDE.md               # 工作区导航地图（init workspace 生成：五类目录表 + 常用命令 + AI 会话须知；人工维护后不覆盖）
 ├── .gitignore              # 忽略 .worktrees/、tech-specs/；biz-tech-docs 登记后由 sync 自动补写
 ├── .agile/settings.json    # 唯一配置
 ├── tech-specs/             # 抽屉一（独立 git 仓库，不入库，sync 管理）
@@ -98,7 +99,8 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 ```
 git init --bare src.git && clone + commit + push      # 准备外部源（tech-specs）
 git init --bare tpl.git && clone + registry.json + push  # 准备模板源（v2：singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
-agile init workspace --name e2e --tech-specs <src.git>    # settings.json + .gitignore 三行
+agile init workspace --name e2e --tech-specs <src.git>    # settings.json + CLAUDE.md 导航地图 + .gitignore 三行
+cat CLAUDE.md                 # 导航地图内容随 settings.paths 实际路径渲染（重复 init 不覆盖）
 agile sync                    # 骨架目录让位 → clone → 检出
 agile sync                    # 幂等：ff-only 无变化
 agile config set biz-tech-docs <src.git> && agile config get biz-tech-docs
@@ -115,6 +117,7 @@ agile init project --template admin-base --name backend=admin-backend   # 组合
 agile init project --template admin-base                 # 撞名跳过路径：若某有效成员目录名已被同名普通项目占用（无生成清单）→ 该成员跳过 + warn（人工核对）
 rm projects/admin-backend/README.md && agile init project --template admin-base --name backend=admin-backend   # 清单校验路径：清单不符 → 硬错误「与生成清单不符（缺 N 文件 / 多 M 项）……请删除该目录后重跑」（2.4.0 起无 --force 出路）
 mkdir projects/placeholder && agile init project --template admin-base   # 空目录放行：同名空目录被模板填充（计入 created）
+mkdir projects/empty-proj && agile init project --name empty-proj        # 空骨架：已存在的空目录同样放行生成（与模板路径语义一致）
 agile worktree create feature/STO-001                    # 前后自动 sync（worktree 内独立 clone）
 agile worktree remove feature/STO-001
 agile plugin install agile && agile plugin ls

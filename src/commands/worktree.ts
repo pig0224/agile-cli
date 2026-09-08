@@ -1,14 +1,22 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from 'commander';
 import { AgileError } from '../core/errors.js';
 import { requireWorkspaceRoot } from '../core/paths.js';
-import { currentBranch, git, gitTry } from '../core/git.js';
+import { currentBranch, git, gitTry, parseWorktreeList, worktreeDirName } from '../core/git.js';
 import { loadSettings } from '../core/config.js';
 import { syncWorkspace } from '../core/sync.js';
 import * as ui from '../ui.js';
 
 /** worktree 存放根目录：workspace 下 .worktrees/（已 gitignore） */
 const WORKTREE_ROOT = '.worktrees';
+
+/** 路径等价判定：Windows 下盘符/大小写不敏感（git 输出与 path.join 的大小写可能不一致），其他平台严格比较 */
+function samePath(a: string, b: string): boolean {
+  const pa = path.resolve(a);
+  const pb = path.resolve(b);
+  return process.platform === 'win32' ? pa.toLowerCase() === pb.toLowerCase() : pa === pb;
+}
 
 /** 自动同步外部资源（tech-specs/biz-tech-docs/模板/插件，同 agile sync）：失败仅警告不阻塞，基于现有状态继续 */
 async function autoSync(dir: string, label: string): Promise<void> {
@@ -56,7 +64,7 @@ export const worktreeCommand = new Command('worktree')
 
         // 2. 解析分支来源：本地已有 → 直接检出；远程已有 → 跟踪检出（协作场景：负责人推了需求分支，另一端拉取）；
         //    都没有 → 以 base 新建。fetch 失败忽略（离线时用本地已有的远程引用判断）。
-        const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
+        const target = path.join(root, WORKTREE_ROOT, worktreeDirName(branch));
         await gitTry(root, ['fetch', 'origin', branch, '--quiet']);
         const hasLocal = (await gitTry(root, ['rev-parse', '--verify', `refs/heads/${branch}`])).ok;
         const hasRemote = (await gitTry(root, ['rev-parse', '--verify', `refs/remotes/origin/${branch}`])).ok;
@@ -70,11 +78,15 @@ export const worktreeCommand = new Command('worktree')
         } else {
           addArgs = ['worktree', 'add', '-b', branch, target, opts.base ?? 'HEAD'];
         }
+        // 记录 add 前目录是否已存在：失败清理只针对本次新建——目录此前已存在（用户手工内容 / a__b 撞名）绝不删
+        const existedBefore = await fs.stat(target).then(() => true).catch(() => false);
         try {
           await git(root, addArgs);
         } catch (e) {
-          // 失败时清理半成品目录（git 可能已创建目录）
-          await import('node:fs/promises').then((fs) => fs.rm(target, { recursive: true, force: true }));
+          // 失败时清理 git 可能已创建的半成品目录（仅限本次新建的目录）
+          if (!existedBefore) {
+            await fs.rm(target, { recursive: true, force: true }).catch(() => {});
+          }
           throw e;
         }
 
@@ -97,20 +109,22 @@ export const worktreeCommand = new Command('worktree')
         if (!r.ok) {
           throw new AgileError(`获取 worktree 列表失败：${r.stderr}`);
         }
-        let found = false;
-        for (const block of r.stdout.split('\n\n')) {
-          const lines = block.split('\n');
-          const wtLine = lines.find((l) => l.startsWith('worktree '));
-          if (!wtLine) continue;
-          const wtPath = path.resolve(wtLine.slice('worktree '.length));
-          if (path.resolve(root) === wtPath) continue;
-          if (wtPath.includes(`${path.sep}.git${path.sep}modules${path.sep}`)) continue;
-          const branchLine = lines.find((l) => l.startsWith('branch '));
-          const branch = branchLine ? branchLine.slice('branch refs/heads/'.length) : '(detached)';
-          found = true;
-          console.log(`${ui.info(branch.padEnd(28))}${path.relative(root, wtPath)}`);
+        const rows = parseWorktreeList(r.stdout)
+          .filter(
+            (w) =>
+              !samePath(w.path, root) &&
+              !w.path.includes(`${path.sep}.git${path.sep}modules${path.sep}`),
+          )
+          .map((w) => ({ branch: w.branch ?? '(detached)', abs: path.resolve(w.path) }));
+        if (rows.length === 0) {
+          console.log(ui.dim('（无 worktree）'));
+          return;
         }
-        if (!found) console.log(ui.dim('（无 worktree）'));
+        // 列宽 = max(28, 最长分支名)：超长分支名不破坏对齐
+        const width = Math.max(28, ...rows.map((w) => w.branch.length));
+        for (const w of rows) {
+          console.log(`${ui.info(w.branch.padEnd(width))}${path.relative(root, w.abs)}`);
+        }
       }),
   )
   .addCommand(
@@ -120,19 +134,34 @@ export const worktreeCommand = new Command('worktree')
       .option('--force', '强制移除（丢弃 worktree 内未提交改动，谨慎使用）')
       .action(async (branch: string, opts: { force?: boolean }) => {
         const root = requireWorkspaceRoot();
-        const target = path.join(root, WORKTREE_ROOT, branch.replace(/[/\\]/g, '__'));
-        const fs = await import('node:fs/promises');
+        const target = path.join(root, WORKTREE_ROOT, worktreeDirName(branch));
         if (!(await fs.stat(target).then(() => true).catch(() => false))) {
           throw new AgileError(`worktree 不存在：${path.relative(root, target)}（agile worktree list 查看）`);
         }
-        const rm = await gitTry(root, ['worktree', 'remove', ...(opts.force ? ['--force'] : []), target]);
-        if (!rm.ok) {
-          // 不是有效 worktree（如创建失败残留的半成品目录）：直接删除目录
+        // 先判定是否为登记在册的 worktree：在册的只走 git worktree remove——其失败 = git 拒绝
+        // （含未提交改动 / 被锁定），绝不兜底 rm -rf（那会把未提交成果连同目录一起删光）；
+        // 不在册的目录才是半成品残留，直接删除。
+        const list = await gitTry(root, ['worktree', 'list', '--porcelain']);
+        if (!list.ok) {
+          throw new AgileError(
+            `无法确认 ${path.relative(root, target)} 是否为登记的 worktree（git worktree list 失败：${list.stderr}）——请人工处理，不做自动删除`,
+          );
+        }
+        const registered = parseWorktreeList(list.stdout).some((w) => samePath(w.path, target));
+        if (registered) {
+          const rm = await gitTry(root, ['worktree', 'remove', ...(opts.force ? ['--force'] : []), target]);
+          if (!rm.ok) {
+            throw new AgileError(
+              `git 拒绝移除 worktree：${rm.stderr || '未知原因'}\n` +
+                `（含未提交改动时，确认丢弃后加 --force 重试；被锁定时先 git worktree unlock ${path.relative(root, target)}）`,
+            );
+          }
+          console.log(ui.ok(`worktree 已移除：${path.relative(root, target)}`));
+        } else {
           await fs.rm(target, { recursive: true, force: true });
           console.log(ui.warn(`已清理非 worktree 目录：${path.relative(root, target)}`));
           return;
         }
-        console.log(ui.ok(`worktree 已移除：${path.relative(root, target)}`));
         // -d（非强制）：分支未合并时 git 拒绝删除并保留——与帮助文案一致，防未合并成果被误删
         const del = await gitTry(root, ['branch', '-d', branch]);
         if (del.ok) console.log(ui.ok(`分支已删除：${branch}`));

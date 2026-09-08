@@ -17,7 +17,7 @@ import {
   TEMPLATE_NAME_RE,
   type SolutionScaffoldResult,
 } from '../core/template-registry.js';
-import { PROJECT_NAME_RE, scaffoldEmptyProject, type CopyNotice } from '../core/scaffold.js';
+import { PROJECT_NAME_RE, scaffoldEmptyProject, workspaceClaudeMdContent, type CopyNotice } from '../core/scaffold.js';
 import * as ui from '../ui.js';
 
 /** 模板复制忽略通知的说明文字（reason → 中文标签） */
@@ -44,7 +44,8 @@ const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
 };
 
 async function exists(p: string): Promise<boolean> {
-  return fs.stat(p).then(() => true).catch(() => false);
+  // lstat：不跟随符号链接——悬空 symlink 也算「存在」，避免误判不存在后在后续步骤抛原始 ENOENT/EEXIST 堆栈
+  return fs.lstat(p).then(() => true).catch(() => false);
 }
 
 /** --name 收集器（可重复）：只收集原始字符串；形态（裸值 / 键值）与合法性在 action 内按场景校验 */
@@ -159,7 +160,7 @@ async function migrateLegacyConfig(agileDir: string, settingsFile: string): Prom
 
   const settings = {
     version: 2,
-    name: raw.name ?? path.basename(process.cwd()),
+    name: raw.name ?? (path.basename(process.cwd()) || 'workspace'),
     created: raw.created ?? new Date().toISOString().slice(0, 10),
     paths,
     repos: {
@@ -181,7 +182,7 @@ export const initCommand = new Command('init')
   .addCommand(
     new Command('workspace')
       .description('初始化 workspace（.agile/settings.json + 五个抽屉骨架 + git 仓库；旧版三 yaml 自动迁移）')
-      .option('--name <name>', 'workspace 名称', path.basename(process.cwd()))
+      .option('--name <name>', 'workspace 名称', path.basename(process.cwd()) || 'workspace')
       .option('--marketplace <url>', '插件市场 git 地址', DEFAULT_PLUGIN_MARKETPLACE)
       .option('--template-registry <url>', '项目模板注册中心 git 地址', DEFAULT_TEMPLATE_REGISTRY)
       .option('--tech-specs <url>', '公司级规范外部仓库 git 地址（也可之后 agile config set tech-specs）')
@@ -249,7 +250,8 @@ export const initCommand = new Command('init')
             await git(root, ['init', '-b', 'main']);
           }
 
-          // 根 .gitignore：幂等补缺——worktree 开发目录 + tech-specs（公司级规范，天然外部仓库，始终忽略）；
+          // 根 .gitignore：幂等补缺——worktree 开发目录 + 项目生成事务临时目录（.tmp-*）+
+          // tech-specs（公司级规范，天然外部仓库，始终忽略）；
           // biz-tech-docs 仅在登记为外部仓库时忽略（默认 workspace 内普通目录，随仓库提交获得版本管理），
           // 后补登记由 agile sync 拉取成功后自动补写该行
           const gitignore = path.join(root, '.gitignore');
@@ -267,11 +269,15 @@ export const initCommand = new Command('init')
           );
           const missing = [
             '.worktrees/',
+            '.tmp-*/',
             `${settings.paths.techSpecs}/`,
             ...(settings.repos.bizTechDocs?.url ? [`${settings.paths.bizTechDocs}/`] : []),
           ].filter((l) => !have.has(l));
           if (missing.length > 0) {
-            gi = gi === '' ? `${missing.join('\n')}\n` : `${gi.replace(/\n*$/, '\n')}${missing.join('\n')}\n`;
+            // 追加行跟随既有文件换行风格（CRLF 文件不产生混合换行）
+            const eol = gi.includes('\r\n') ? '\r\n' : '\n';
+            const additions = missing.join(eol);
+            gi = gi === '' ? `${additions}${eol}` : `${gi.replace(/\r?\n*$/, eol)}${additions}${eol}`;
             await fs.writeFile(gitignore, gi, 'utf8');
           }
 
@@ -279,6 +285,14 @@ export const initCommand = new Command('init')
           const gitattributes = path.join(root, '.gitattributes');
           if (!(await exists(gitattributes))) {
             await fs.writeFile(gitattributes, '* text=auto eol=lf\n*.bat text eol=crlf\n*.cmd text eol=crlf\n', 'utf8');
+          }
+
+          // workspace 根 CLAUDE.md 导航地图（幂等；AI 会话不依赖 README 导航）
+          // 已存在即跳过——人工会持续增补（团队约定/项目指针），CLI 永不覆盖
+          const claudeMd = path.join(root, 'CLAUDE.md');
+          if (!(await exists(claudeMd))) {
+            await fs.writeFile(claudeMd, workspaceClaudeMdContent(settings.name, settings.paths), 'utf8');
+            console.log(ui.dim('已生成 CLAUDE.md（workspace 导航地图）：按团队实际增补后随仓库提交。'));
           }
 
           console.log(ui.ok(`workspace 初始化完成：${root}`));
@@ -326,7 +340,10 @@ export const initCommand = new Command('init')
           const repoPath = `${settings.paths.projects}/${dirName}`;
           const abs = path.join(root, repoPath);
           if (await exists(abs)) {
-            throw new AgileError(`目录已存在：${repoPath}`);
+            // 已存在的空目录放行生成（与模板路径的空目录语义一致）；非空才拒绝
+            if ((await fs.readdir(abs)).length > 0) {
+              throw new AgileError(`目录已存在：${repoPath}`);
+            }
           }
           await scaffoldEmptyProject(abs, dirName);
           await git(root, ['add', repoPath]);

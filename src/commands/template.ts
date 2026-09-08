@@ -64,8 +64,9 @@ export const templateCommand = new Command('template')
         }
 
         if (issues.length > 0) {
-          console.log('');
-          for (const issue of issues) console.log(ui.warn(issue));
+          // issues 属告警：走 stderr（与 --json 模式及本文件注释口径一致，脚本捕获 stdout 的消费方不被污染）
+          console.error('');
+          for (const issue of issues) console.error(ui.warn(issue));
           process.exitCode = 1;
         }
         console.log('');
