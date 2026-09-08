@@ -1,3 +1,15 @@
+## v2.7.0 (2026-09-08)
+
+> bump: minor
+
+### Features
+
+- feat: init workspace 生成的根 CLAUDE.md 新增「根白名单与项目边界」节 ([`1e26206`](https://github.com/pig0224/agile-cli/commit/1e262061c2473e358046c553520b933bcbd2c968))
+
+### Other Changes
+
+- refactor: 精简五抽屉 README 骨架文案 ([`b8199f6`](https://github.com/pig0224/agile-cli/commit/b8199f6b535fc8f130986fc9a32f1157c3710e61))
+
 ## v2.6.0 (2026-09-08)
 
 > bump: minor
