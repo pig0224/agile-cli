@@ -1,3 +1,11 @@
+## v2.6.0 (2026-09-08)
+
+> bump: minor
+
+### Features
+
+- feat: tech-specs 入库语义对齐 biz-tech-docs；agile sync 插件按声明安装并保持更新 ([`06aa324`](https://github.com/pig0224/agile-cli/commit/06aa324c4048f6e11aa48b4502f7f6eb2bd0bbd2))
+
 ## v2.5.0 (2026-09-08)
 
 > bump: minor
