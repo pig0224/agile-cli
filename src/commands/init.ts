@@ -36,11 +36,11 @@ function printCopyNotices(notices: CopyNotice[]): void {
 
 /** 抽屉骨架说明（README 放进各抽屉；key 与 settings.paths 的键一致） */
 const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
-  techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范（workspace 仓库内普通目录，随仓库提交获得版本管理）。\n公司规范集中维护/多 workspace 共享时可登记为外部 git 仓库：`agile config set tech-specs <git-url>` 后 `agile sync`——登记后目录改为 .gitignore 忽略、不入 workspace 仓库（sync 自动补写忽略行），骨架目录自动让位。\n',
-  bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范（workspace 仓库内普通目录，随仓库提交获得版本管理）。\n多 workspace 团队可登记为外部 git 仓库共享（单一事实源）：`agile config set biz-tech-docs <git-url>` 后 `agile sync`——登记后目录改为 .gitignore 忽略、不入 workspace 仓库（sync 自动补写忽略行），骨架目录自动让位。\n',
-  bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范（workspace 仓库内目录）。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）；产品通过 GitHub Web / VS Code 直接编辑（走 PR）。\nPRD 写作模板见 `templates/PRD模板.md`。\n',
-  projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此（workspace 仓库内目录；组合模板一次生成多个平铺成员项目，成员名与模板名同命名空间、全局唯一）。\n使用 `agile init project --template <模板或组合模板名> [--name <目录名 | 组合项目名称=目录名>]` 创建（--template 缺省为空项目骨架，此时 --name <目录名> 必填；agile template list 查看单例模板与组合模板）。\n',
-  processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档（workspace 仓库内目录）。\n标准目录由 Claude Code 插件命令 /agile:sync-req、/agile:fix-bug 等按 sdd-tdd-method SKILL 附录模板直接创建。\n',
+  techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n',
+  bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范。\n',
+  bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）。\n',
+  projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此。\n',
+  processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档。\n',
 };
 
 async function exists(p: string): Promise<boolean> {
