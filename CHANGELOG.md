@@ -1,3 +1,11 @@
+## v2.5.0 (2026-09-08)
+
+> bump: minor
+
+### Features
+
+- feat: init workspace 生成工作区根 CLAUDE.md 导航地图；修复全面自检问题批次 ([`5275483`](https://github.com/pig0224/agile-cli/commit/5275483093b7821f45b45f547ccd3d9b194bdc2a))
+
 ## v2.4.1 (2026-09-08)
 
 > bump: patch
