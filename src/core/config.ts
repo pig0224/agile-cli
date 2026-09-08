@@ -42,8 +42,10 @@ export async function loadSettings(root: string): Promise<Settings> {
     const issues = result.error.issues.map((i) => `  - ${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('\n');
     throw new AgileError(`${AGILE_DIR}/${SETTINGS_FILE} 格式校验失败：\n${issues}`);
   }
-  // 配置版本迁移：v1（2.0.x 存量）兼容读取，内存归一为 v2——后续任意写入自然落盘升级
-  return { ...result.data, version: 2 };
+  // 配置版本迁移：v1（2.0.x 存量）兼容读取，内存归一为 v2——后续任意写入自然落盘升级。
+  // structuredClone 隔离 zod 共享默认对象：.default({...}) 每次解析返回同一引用，
+  // 调用方原地改 settings.plugins.dependencies / settings.paths 会污染进程内后续所有解析
+  return structuredClone({ ...result.data, version: 2 });
 }
 
 export async function saveSettings(root: string, settings: Settings): Promise<void> {

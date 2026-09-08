@@ -69,7 +69,7 @@ export async function readInstalledClaudePlugins(claudePluginsDir?: string): Pro
 
 export type PluginSyncAction =
   | { kind: 'install'; name: string; marketplace: string; pluginId: string }
-  | { kind: 'skip'; name: string; pluginId: string }
+  | { kind: 'update'; name: string; marketplace: string; pluginId: string }
   | {
       kind: 'conflict';
       name: string;
@@ -93,7 +93,7 @@ const splitPluginId = (pluginId: string): [string, string] => {
   return at <= 0 ? [pluginId, ''] : [pluginId.slice(0, at), pluginId.slice(at + 1)];
 };
 
-/** 由依赖声明与本机实况产出同步计划：缺的装、已装一致跳过、市场不符判冲突、绝不卸载 */
+/** 由依赖声明与本机实况产出同步计划：缺的装、已装检查更新、市场不符判冲突、绝不卸载 */
 export function planPluginSync(
   dependencies: Record<string, PluginDependency>,
   installed: Map<string, ClaudeInstallInfo>,
@@ -108,7 +108,7 @@ export function planPluginSync(
     const marketplace = dep.marketplace || defaultMarketplace;
     const pluginId = `${name}@${marketplace}`;
     if (installed.has(pluginId)) {
-      actions.push({ kind: 'skip', name, pluginId });
+      actions.push({ kind: 'update', name, marketplace, pluginId });
     } else {
       const elsewhere = [...installed.keys()].find((id) => splitPluginId(id)[0] === name);
       if (elsewhere) {
@@ -135,8 +135,13 @@ export interface PluginSyncStep {
   detail: string;
 }
 
-/** 按 settings.plugins.dependencies 声明收敛本机插件：缺的装、已装跳过、市场不符警告，绝不卸载 */
-export async function syncPlugins(root: string, settings: Settings, opts: { dryRun?: boolean } = {}): Promise<PluginSyncStep[]> {
+/** 按 settings.plugins.dependencies 声明收敛本机插件：缺的装、已装检查更新（失联/失败降级沿用本地已装版本）、
+ *  市场不符警告，绝不卸载 */
+export async function syncPlugins(
+  root: string,
+  settings: Settings,
+  opts: { dryRun?: boolean; /** 测试注入：Claude Code 插件实况目录（缺省 ~/.claude/plugins） */ claudePluginsDir?: string } = {},
+): Promise<PluginSyncStep[]> {
   const steps: PluginSyncStep[] = [];
   const dependencies = settings.plugins.dependencies ?? {};
   if (Object.keys(dependencies).length === 0) {
@@ -144,14 +149,60 @@ export async function syncPlugins(root: string, settings: Settings, opts: { dryR
     return steps;
   }
 
-  const installed = await readInstalledClaudePlugins();
+  const installed = await readInstalledClaudePlugins(opts.claudePluginsDir);
   const plan = planPluginSync(dependencies, installed, MARKETPLACE_NAME);
   let marketplaceReady = false;
   let installedAny = false;
+  let updatedAny = false;
+  /** 已刷新/刷新失败的市场名（claude plugin marketplace update 每市场只跑一次） */
+  const refreshed = new Set<string>();
+  const refreshFailed = new Set<string>();
 
   for (const action of plan.actions) {
-    if (action.kind === 'skip') {
-      steps.push({ name: action.pluginId, status: 'skipped', detail: '已安装' });
+    if (action.kind === 'update') {
+      if (opts.dryRun) {
+        steps.push({ name: action.pluginId, status: 'skipped', detail: '[dry-run] 将检查更新' });
+        continue;
+      }
+      // 1. 市场刷新（对已注册市场幂等拉新；add 只兜底注册不拉新，故这里必须显式 update）
+      if (refreshFailed.has(action.marketplace)) {
+        steps.push({ name: action.pluginId, status: 'warn', detail: '插件市场刷新失败，沿用本地已装版本' });
+        continue;
+      }
+      if (!refreshed.has(action.marketplace)) {
+        const mup = await runClaude(['plugin', 'marketplace', 'update', action.marketplace]);
+        if (mup.exitCode !== 0) {
+          refreshFailed.add(action.marketplace);
+          steps.push({
+            name: action.pluginId,
+            status: 'warn',
+            detail: `插件市场刷新失败，沿用本地已装版本（可手动执行：claude plugin marketplace update ${action.marketplace}；${(mup.stderr || mup.stdout || '').split('\n')[0]}）`,
+          });
+          continue;
+        }
+        refreshed.add(action.marketplace);
+      }
+      // 2. 更新到市场最新（插件无 version 字段 → 按 git commit SHA 判定，push 即有新缓存键）
+      const upd = await runClaude(['plugin', 'update', action.pluginId]);
+      if (upd.exitCode !== 0) {
+        steps.push({
+          name: action.pluginId,
+          status: 'warn',
+          detail: `更新失败，沿用本地已装版本（${(upd.stderr || upd.stdout || '').split('\n')[0]}）`,
+        });
+        continue;
+      }
+      // 3. 比对更新前后的 gitCommitSha 判定是否真有更新（sha 缺失时无法判定，报已检查更新）
+      const before = installed.get(action.pluginId)?.gitCommitSha;
+      const after = (await readInstalledClaudePlugins(opts.claudePluginsDir)).get(action.pluginId)?.gitCommitSha;
+      if (before !== undefined && after !== undefined && before !== after) {
+        updatedAny = true;
+        steps.push({ name: action.pluginId, status: 'done', detail: '已更新到市场最新（重启 Claude Code 会话生效）' });
+      } else if (before === undefined || after === undefined) {
+        steps.push({ name: action.pluginId, status: 'done', detail: '已检查更新' });
+      } else {
+        steps.push({ name: action.pluginId, status: 'done', detail: '已是最新' });
+      }
       continue;
     }
     if (action.kind === 'conflict') {
@@ -199,7 +250,7 @@ export async function syncPlugins(root: string, settings: Settings, opts: { dryR
     steps.push({ name: pluginId, status: 'skipped', detail: `本机已装但未在当前 workspace 声明（不影响使用；不再需要可 claude plugin uninstall ${pluginId}）` });
   }
 
-  if (installedAny) {
+  if (installedAny || updatedAny) {
     steps.push({ name: '插件', status: 'done', detail: '重启 Claude Code 会话后生效' });
   }
   return steps;

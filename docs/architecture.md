@@ -9,14 +9,14 @@
 - biz-product-docs / projects / process-docs = 普通目录
 - **跨模块变更一个 PR 天然原子**（前后端代码 + 过程文档一起 review、一起 merge）
 - 发版 = workspace 仓库打 tag（可目录级 tag，如 `projects/order-service/v1.2.0`）
-- **外部资源不进 workspace 仓库（按登记）**：tech-specs（公司级规范，跨团队共享、独立演进、团队无写权限）恒写入 .gitignore；biz-tech-docs（团队知识库）登记为外部仓库后才写入 .gitignore——未登记时它是 workspace 内普通目录（随仓库提交、worktree 天然可用）。已登记目录各自是独立 git 仓库，由 `agile sync` clone/快进拉取——**本地改动优先，绝不覆盖**（这些目录是可写工作区，知识库命令会直接落盘）
+- **外部资源不进 workspace 仓库（按登记）**：tech-specs（公司级规范）与 biz-tech-docs（团队知识库）同一规则——未登记时是 workspace 内普通目录（随仓库提交、worktree 天然可用）；登记为外部仓库后才写入 .gitignore。已登记目录各自是独立 git 仓库，由 `agile sync` clone/快进拉取——**本地改动优先，绝不覆盖**（这些目录是可写工作区，知识库命令会直接落盘）。登记动机是跨 workspace 共享、集中演进（如公司规范、多团队共用知识库）
 
 ```
 workspace/                  # 单一 git 仓库（团队）
 ├── CLAUDE.md               # 工作区导航地图（init workspace 生成：五类目录表 + 常用命令 + AI 会话须知；人工维护后不覆盖）
-├── .gitignore              # 忽略 .worktrees/、tech-specs/；biz-tech-docs 登记后由 sync 自动补写
+├── .gitignore              # 忽略 .worktrees/；tech-specs/、biz-tech-docs/ 登记为外部仓库后写入（sync 自动补写）
 ├── .agile/settings.json    # 唯一配置
-├── tech-specs/             # 抽屉一（独立 git 仓库，不入库，sync 管理）
+├── tech-specs/             # 抽屉一（默认普通目录随仓库入库；config set 登记为外部仓库后不入库，sync 管理）
 ├── biz-tech-docs/          # 抽屉二（默认普通目录随仓库入库；config set 登记为外部仓库后不入库，sync 管理）
 ├── biz-product-docs/       # 抽屉三（普通目录）
 ├── projects/               # 抽屉四（普通目录，模板脚手架落此）
@@ -99,7 +99,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 ```
 git init --bare src.git && clone + commit + push      # 准备外部源（tech-specs）
 git init --bare tpl.git && clone + registry.json + push  # 准备模板源（v2：singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
-agile init workspace --name e2e --tech-specs <src.git>    # settings.json + CLAUDE.md 导航地图 + .gitignore 三行
+agile init workspace --name e2e --tech-specs <src.git>    # settings.json + CLAUDE.md 导航地图 + .gitignore（.worktrees/、.tmp-*/、已登记的 tech-specs/）
 cat CLAUDE.md                 # 导航地图内容随 settings.paths 实际路径渲染（重复 init 不覆盖）
 agile sync                    # 骨架目录让位 → clone → 检出
 agile sync                    # 幂等：ff-only 无变化

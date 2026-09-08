@@ -59,9 +59,9 @@ async function makeWorkspace(repos: Settings['repos'] = {}): Promise<string> {
     templates: { registry: templateSource() },
   };
   await fs.writeFile(path.join(dir, '.agile', 'settings.json'), JSON.stringify(settings, null, 2), 'utf8');
-  // 模拟 init workspace：tech-specs 恒忽略（公司级规范、天然外部仓库）；biz-tech-docs 未登记则不忽略
-  // （默认 workspace 内普通目录随仓库入库；登记为外部仓库后由 sync 自动补写忽略行）
-  await fs.writeFile(path.join(dir, '.gitignore'), '.worktrees/\ntech-specs/\n', 'utf8');
+  // 模拟 init workspace：两抽屉同一入库规则——未登记不忽略（workspace 内普通目录随仓库入库），
+  // 登记为外部仓库后由 sync 自动补写忽略行
+  await fs.writeFile(path.join(dir, '.gitignore'), '.worktrees/\n', 'utf8');
   return dir;
 }
 
@@ -206,6 +206,25 @@ describe('syncWorkspace：外部仓库槽位', () => {
     const warn = steps.find((s) => s.name.startsWith('biz-tech-docs') && s.status === 'warn');
     expect(warn?.detail).toContain('未登记');
     expect(warn?.detail).toContain('入库');
+  });
+
+  it('tech-specs 未登记但 .gitignore 残留忽略行 → warn 提示（与 biz-tech-docs 同规则）', { timeout: 60_000 }, async () => {
+    const dir = await makeWorkspace();
+    // 模拟旧版本 init（tech-specs 恒忽略时代）留下的残留行（或登记后又 unset）
+    await fs.appendFile(path.join(dir, '.gitignore'), 'tech-specs/\n', 'utf8');
+    const steps = await syncWorkspace(dir, await loadSettings(dir));
+    const warn = steps.find((s) => s.name.startsWith('tech-specs') && s.status === 'warn');
+    expect(warn?.detail).toContain('未登记');
+    expect(warn?.detail).toContain('入库');
+  });
+
+  it('两槽位均未登记且无残留忽略行 → skipped 且无 warn', { timeout: 60_000 }, async () => {
+    const dir = await makeWorkspace();
+    const steps = await syncWorkspace(dir, await loadSettings(dir));
+    for (const label of ['tech-specs', 'biz-tech-docs']) {
+      expect(stepOf(steps, label)?.status).toBe('skipped');
+      expect(steps.filter((s) => s.name.startsWith(label) && s.status === 'warn')).toHaveLength(0);
+    }
   });
 
   it('.gitignore 无法写入（如被同名目录占用）→ 自动补写失败降级 warn 交人工', { timeout: 60_000 }, async () => {

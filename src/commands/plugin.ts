@@ -18,7 +18,7 @@ async function recordDependency(root: string, name: string, marketplaceName: str
 
 export const pluginCommand = new Command('plugin')
   .description(
-    'Claude Code 插件管理（类 npm 心智；插件市场为独立 git 仓库，新增插件无需升级 CLI；依赖声明登记在 .agile/settings.json 的 plugins.dependencies，agile sync 按声明补装；换源：agile config set plugin-repo <git-url>，换源目标市场（如镜像）需保持 marketplace.json 的 name=fcc；异名第三方市场请直接用 claude plugin 命令）',
+    'Claude Code 插件管理（类 npm 心智；插件市场为独立 git 仓库，新增插件无需升级 CLI；依赖声明登记在 .agile/settings.json 的 plugins.dependencies，agile sync 按声明安装并保持更新；换源：agile config set plugin-repo <git-url>，换源目标市场（如镜像）需保持 marketplace.json 的 name=fcc；异名第三方市场请直接用 claude plugin 命令）',
   )
   .addCommand(
     new Command('install')
@@ -170,9 +170,9 @@ export const pluginCommand = new Command('plugin')
           return;
         }
         for (const action of plan.actions) {
-          if (action.kind === 'skip') {
+          if (action.kind === 'update') {
             // 状态标记用单符号（✔/⚠）：ui.ok/ui.warn 自带前缀，包符号会渲染成双标记
-            console.log(`  ${pc.green('✔')} ${action.pluginId}${ui.dim('（已安装）')}`);
+            console.log(`  ${pc.green('✔')} ${action.pluginId}${ui.dim('（已安装，agile sync 时检查更新）')}`);
           } else if (action.kind === 'conflict') {
             console.log(
               `  ${pc.yellow('⚠')} ${action.name}${ui.warn(

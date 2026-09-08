@@ -17,9 +17,9 @@
 ## 核心模型（单仓模式）
 
 - workspace = **单一 git 仓库**：biz-product-docs / projects / process-docs 都是普通目录；跨模块变更一个 PR 天然原子
-- **外部资源不入库（按登记）**：tech-specs（公司级规范，天然外部仓库）恒写 .gitignore；biz-tech-docs（团队知识库）**登记为外部仓库后才忽略**（init 按 repos 写入；后补登记由 sync 拉取后自动补写忽略行）——未登记时它是 workspace 内普通目录，随仓库提交获得版本管理。已登记目录是**独立 git 仓库 + 可写工作区**（知识库命令直接落盘）→ sync 一律 pull 不 reset、dirty 警告跳过绝不覆盖
+- **外部资源不入库（按登记）**：tech-specs 与 biz-tech-docs **同一规则——登记为外部仓库后才写 .gitignore**（init 按 repos 写入；后补登记由 sync 拉取后自动补写忽略行），未登记时是 workspace 内普通目录，随仓库提交获得版本管理。已登记目录是**独立 git 仓库 + 可写工作区**（知识库命令直接落盘）→ sync 一律 pull 不 reset、dirty 警告跳过绝不覆盖
 - **`.agile/settings.json` = 唯一配置**：抽屉路径（paths）、外部仓库（repos：techSpecs/bizTechDocs，`{url, ref?}`，ref 版本锁定预留）、插件市场与依赖声明（plugins）、模板源（templates）；旧版三 yaml 由 init workspace 自动迁移
-- **sync 四步拉取**：repos（clone/ff-only，本地优先）→ templates（缓存刷新，失联降级）→ plugins（按声明安装，绝不卸载）；core 返回 steps 不打印
+- **sync 四步拉取**：repos（clone/ff-only，本地优先）→ templates（缓存刷新，失联降级）→ plugins（按声明安装并检查更新，失联/失败降级沿用已装，绝不卸载）；core 返回 steps 不打印
 - projects 内项目由 `init project` 生成（普通目录 + git add，不走 submodule）：`--template` 从模板脚手架，缺省为空项目骨架（`scaffoldEmptyProject`，不访问模板注册中心）
 
 ## 常用命令

@@ -7,7 +7,7 @@ import * as ui from '../ui.js';
 
 export const syncCommand = new Command('sync')
   .description(
-    '同步外部资源到本地：外部仓库（公司级规范 tech-specs / 团队知识库 biz-tech-docs，clone 或快进拉取，本地改动优先）+ 模板缓存刷新 + Claude 插件按声明安装（绝不卸载）',
+    '同步外部资源到本地：已登记的外部仓库（tech-specs / biz-tech-docs，clone 或快进拉取，本地改动优先）+ 模板缓存刷新 + Claude 插件按声明安装并检查更新（绝不卸载）',
   )
   .option('--dry-run', '只显示将执行的动作，不落盘')
   .action(async (opts: { dryRun?: boolean }) => {

@@ -33,8 +33,9 @@ export const SettingsSchema = z.object({
   name: z.string().min(1),
   created: z.string(),
   paths: PathsSchema,
-  /** 外部仓库：公司级规范（techSpecs）与团队技术知识库（bizTechDocs）。
-   *  目录被 .gitignore 忽略不入库，由 agile sync 拉取到本地；未配置则 sync 提示跳过。 */
+  /** 外部仓库登记：公司级规范（techSpecs）与团队技术知识库（bizTechDocs），两键同一入库规则——
+   *  未登记时对应目录是 workspace 内普通目录，随仓库提交获得版本管理；
+   *  登记后（url 配置）目录被 .gitignore 忽略不入库，由 agile sync 拉取到本地；未配置则 sync 提示跳过。 */
   repos: z
     .object({
       techSpecs: RepoEntrySchema.optional(),

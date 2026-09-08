@@ -18,12 +18,12 @@ export interface SyncOptions {
   dryRun?: boolean;
 }
 
-/** sync 覆盖的外部仓库槽位：key 与 settings.repos / settings.paths 的键一致；
- *  alwaysIgnore = 未登记也写入 .gitignore（tech-specs 为公司级规范、天然外部仓库，
- *  即使当前 workspace 未登记也不该提交入库；biz-tech-docs 未登记时是 workspace 内普通目录，随仓库入库） */
+/** sync 覆盖的外部仓库槽位：key 与 settings.repos / settings.paths 的键一致。
+ *  两槽位同一入库规则：未登记 = workspace 内普通目录，随仓库提交获得版本管理；
+ *  登记为外部仓库后 = .gitignore 忽略不入库，由 sync 拉取维护（忽略行的写入/补写见下方分支） */
 const REPO_SLOTS = [
-  { key: 'techSpecs', label: 'tech-specs（公司级规范）', configKey: 'tech-specs', alwaysIgnore: true },
-  { key: 'bizTechDocs', label: 'biz-tech-docs（团队知识库）', configKey: 'biz-tech-docs', alwaysIgnore: false },
+  { key: 'techSpecs', label: 'tech-specs（公司级规范）', configKey: 'tech-specs' },
+  { key: 'bizTechDocs', label: 'biz-tech-docs（团队知识库）', configKey: 'biz-tech-docs' },
 ] as const;
 
 /** 单个外部仓库槽位的收敛：目录缺失 → clone；已有 → fetch + ff-only 快进（dirty 跳过、分叉报人工） */
@@ -148,13 +148,13 @@ export async function syncWorkspace(root: string, settings: Settings, opts: Sync
         );
       }
     }
-    // 未登记且非「始终忽略」槽位 → .gitignore 残留忽略行会让知识库内容不入库，提示人工删行
-    // （登记后该行由本命令维护；tech-specs 未登记也忽略，属预期，不提示）
-    if (!registered && !slot.alwaysIgnore && covered) {
+    // 未登记 → .gitignore 残留忽略行会让目录内容不入库，提示人工删行
+    // （登记后该行由本命令维护；未登记时目录应随 workspace 仓库提交）
+    if (!registered && covered) {
       steps.push({
         name: slot.label,
         status: 'warn',
-        detail: `${settings.paths[slot.key]}/ 在 .gitignore 中但未登记为外部仓库——知识库内容不会随 workspace 仓库入库；若需入库请手动删除该行（登记为外部仓库后该行由 agile sync 维护）`,
+        detail: `${settings.paths[slot.key]}/ 在 .gitignore 中但未登记为外部仓库——内容不会随 workspace 仓库入库；若需入库请手动删除该行（登记为外部仓库后该行由 agile sync 维护）`,
       });
     }
     if (settings.repos[slot.key]?.ref) {

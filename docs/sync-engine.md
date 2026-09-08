@@ -1,6 +1,6 @@
 # Sync Engine 设计
 
-> `agile sync` 把四类外部资源拉到本地：外部仓库（tech-specs / biz-tech-docs）、模板缓存、Claude 插件。实现见 [src/core/sync.ts](../src/core/sync.ts)，插件执行层见 [src/core/claude-plugins.ts](../src/core/claude-plugins.ts)。
+> `agile sync` 把四类外部资源拉到本地：已登记的外部仓库（tech-specs / biz-tech-docs）、模板缓存、Claude 插件。实现见 [src/core/sync.ts](../src/core/sync.ts)，插件执行层见 [src/core/claude-plugins.ts](../src/core/claude-plugins.ts)。
 
 ## 1. 四步拉取
 
@@ -18,7 +18,7 @@
    └── 干净                     → fetch origin + merge --ff-only @{upstream}
                                   失败 → failed（分叉/force-push，交人工）
    已登记抽屉未进 .gitignore → 自动补写忽略行（幂等；dry-run 只出计划，写失败降级 warn）
-   bizTechDocs 未登记但 .gitignore 残留忽略行 → warn（知识库默认随 workspace 入库，提示人工删行）
+   未登记但 .gitignore 残留忽略行 → warn（默认随 workspace 入库，提示人工删行；两槽位同规则）
    ref 版本锁定（预留）          → 追加 warn「锁定暂未实现，按最新拉取」（不阻断）
 
 ② templates
@@ -28,7 +28,10 @@
 
 ③ plugins（按 settings.plugins.dependencies 声明收敛，绝不卸载）
    无声明                       → skipped
-   已装同市场                   → skipped
+   已装同市场                   → marketplace update（每市场一次，拉新市场克隆）
+   │                            └── 刷新失败 → warn 降级「沿用本地已装版本」（同市场后续插件同样降级）
+   │                            → claude plugin update：比对更新前后 gitCommitSha
+   │                               变化 → done「已更新（重启会话生效）」；未变 → done「已是最新」；sha 缺失 → done「已检查更新」
    本机同名来自其他市场         → warn（不自动替换，给出切换命令）
    未安装                       → marketplace add（幂等兜底）+ claude plugin install
    ref 版本锁定（预留）         → warn「锁定暂未实现，按市场最新安装」
