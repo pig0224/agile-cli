@@ -133,5 +133,9 @@ describe('scaffold', () => {
     expect(md).toContain('code/<项目>/CLAUDE.md');
     expect(md).toContain('无 design.md 不开发');
     expect(md).toContain('.agile/settings.json');
+    // 壳层边界：会话层配置只认启动目录（projects/ 内不落），根白名单随模板带出
+    expect(md).toContain('根白名单与项目边界');
+    expect(md).toContain('.mcp.json');
+    expect(md).toContain('`code/<项目>/` 内不创建');
   });
 });

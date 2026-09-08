@@ -137,7 +137,8 @@ export async function scaffoldEmptyProject(dest: string, name: string): Promise<
 }
 
 /** workspace 根 CLAUDE.md 导航地图内容（`init workspace` 生成；纯函数便于单测）。
- *  定位是「导航」而非文档：五类目录表（按 settings.paths 实际路径）+ 配置/清单指针 + 常用命令 + AI 会话须知，
+ *  定位是「导航」而非文档：五类目录表（按 settings.paths 实际路径）+ 配置/清单指针 + 常用命令
+ *  + 根白名单与项目边界（会话层配置只认启动目录，壳层工具选型由团队自决）+ AI 会话须知，
  *  细节指向各抽屉 README 与项目级 CLAUDE.md，避免双份事实源。 */
 export function workspaceClaudeMdContent(
   name: string,
@@ -151,9 +152,9 @@ export function workspaceClaudeMdContent(
 ): string {
   return `# CLAUDE.md — ${name}（agile workspace 导航）
 
-> 本文件由 \`agile init workspace\` 生成，作为 AI 会话的工作区导航地图，随仓库提交（团队共享）。手工维护后 CLI 不会覆盖；各目录详情见其下 README.md。
+> 本文件由 \`agile init workspace\` 生成，作为 AI 会话的工作区导航地图，随仓库提交（团队共享）。
 
-## 目录导航（五类目录，路径可在 .agile/settings.json 调整）
+## 目录导航
 
 | 目录 | 角色 | 版本管理 |
 |---|---|---|
@@ -178,10 +179,24 @@ export function workspaceClaudeMdContent(
 | \`agile worktree create / remove <分支>\` | 并行开发环境（前后自动 sync） |
 | \`agile plugin install agile\` / \`agile plugin ls\` | 安装 / 查看 Claude Code 插件 |
 
+## 根白名单与项目边界
+
+- 会话层配置只认启动目录：\`.claude/\`（权限白名单 / hooks，人工维护）与 \`.mcp.json\` 放 **workspace 根**；\`${paths.projects}/<项目>/\` 内不创建（子目录中的不被读取）
+- 项目工程配置（lint / build / test / 依赖）一律项目内自包含，不提升到根；根上不落栈专属工具配置
+- 根上仅允许：本文件、\`.agile/\`、\`.gitignore\` / \`.gitattributes\`、\`.github/\`、\`PRD模板.md\`、${paths.processDocs}/、三类知识库目录（见上表）、${paths.projects}/，以及团队自选的壳层文件（钩子壳 \`.githooks/\` 或 \`.husky/\`、命令分发壳 \`Taskfile.yml\` / \`lefthook.yml\` / \`Makefile\`、配套 \`package.json\`、\`CODEOWNERS\`）——根上用什么钩子/分发工具由团队自决，AI 不预置
+- 新增项目接入壳层：按团队自选的钩子与命令分发工具，在根上对应配置里为 \`${paths.projects}/<项目>/\` 各登记一条
+
 ## AI 会话须知
 
 - 斜杠命令（/agile:init、/agile:sync-req、/agile:fix-bug 等）来自 agile 插件：\`/agile:help\` 查看全部
 - 需求流程遵循 sdd-tdd-method SKILL：无 design.md 不开发；无失败测试不写实现
 - 单个项目的技术栈与约定见 \`${paths.projects}/<项目>/CLAUDE.md\`（项目导航）
+
+## FCC-Agile AI 驱动的敏捷工作流
+
+- Agile CLI  [https://github.com/pig0224/agile-cli](https://github.com/pig0224/agile-cli)
+- Agile Plugins  [https://github.com/pig0224/agile-plugins](https://github.com/pig0224/agile-plugins)
+- Agile Templates  [https://github.com/pig0224/agile-templates](https://github.com/pig0224/agile-templates)
+- Agile Docs  [https://github.com/pig0224/agile-docs](https://github.com/pig0224/agile-docs)
 `;
 }
