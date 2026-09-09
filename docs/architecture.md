@@ -14,7 +14,7 @@
 ```
 workspace/                  # 单一 git 仓库（团队）
 ├── CLAUDE.md               # 工作区导航地图（init workspace 生成：五类目录表 + 常用命令 + AI 会话须知；人工维护后不覆盖）
-├── .gitignore              # 忽略 .worktrees/；tech-specs/、biz-tech-docs/ 登记为外部仓库后写入（sync 自动补写）
+├── .gitignore              # 忽略 .worktrees/、.tmp-*/、process-docs/*/assets/（截图本机留存）；tech-specs/、biz-tech-docs/ 登记为外部仓库后写入（sync 自动补写）
 ├── .agile/settings.json    # 唯一配置
 ├── tech-specs/             # 抽屉一（默认普通目录随仓库入库；config set 登记为外部仓库后不入库，sync 管理）
 ├── biz-tech-docs/          # 抽屉二（默认普通目录随仓库入库；config set 登记为外部仓库后不入库，sync 管理）
@@ -99,7 +99,7 @@ CLI 对两个仓库的内容零知识：安装插件 = `claude plugin marketplac
 ```
 git init --bare src.git && clone + commit + push      # 准备外部源（tech-specs）
 git init --bare tpl.git && clone + registry.json + push  # 准备模板源（v2：singles/<模板>/ 单例 + solutions/<组合>/<成员>/ 组合专属成员模板）
-agile init workspace --name e2e --tech-specs <src.git>    # settings.json + CLAUDE.md 导航地图 + .gitignore（.worktrees/、.tmp-*/、已登记的 tech-specs/）
+agile init workspace --name e2e --tech-specs <src.git>    # settings.json + CLAUDE.md 导航地图 + .gitignore（.worktrees/、.tmp-*/、process-docs/*/assets/、已登记的 tech-specs/）
 cat CLAUDE.md                 # 导航地图内容随 settings.paths 实际路径渲染（重复 init 不覆盖）
 agile sync                    # 骨架目录让位 → clone → 检出
 agile sync                    # 幂等：ff-only 无变化

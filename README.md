@@ -55,7 +55,7 @@ agile plugin install agile
 
 ```
 my-workspace/                    # 团队工作区
-├── .gitignore                   # 忽略 .worktrees/；tech-specs/、biz-tech-docs/ 登记为外部仓库后写入（sync 自动补写）
+├── .gitignore                   # 忽略 .worktrees/、.tmp-*/、process-docs/*/assets/（截图本机留存）；tech-specs/、biz-tech-docs/ 登记为外部仓库后写入（sync 自动补写）
 ├── .agile/
 │   └── settings.json            # 唯一配置：目录路径、外部资源、插件市场与依赖声明、模板源
 ├── tech-specs/                  # 公司级技术规范（默认随工作区提交；config set 登记后由 sync 自动维护）
