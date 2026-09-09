@@ -1,3 +1,11 @@
+## v2.8.1 (2026-09-09)
+
+> bump: patch
+
+### Fixes
+
+- fix: prompts/README 措辞软化——细节修订允许直接改 PRD/AC ([`03277d3`](https://github.com/pig0224/agile-cli/commit/03277d3732b0a07266961c9df2c528caf72d75e8))
+
 ## v2.8.0 (2026-09-09)
 
 > bump: minor
