@@ -1,3 +1,11 @@
+## v2.8.0 (2026-09-09)
+
+> bump: minor
+
+### Features
+
+- feat: workspace 预建需求输入提示词目录 prompts/（init 骨架 + 导航引导） ([`9a68ae0`](https://github.com/pig0224/agile-cli/commit/9a68ae0b2a93d2303a05a3569623fd63c4e775db))
+
 ## v2.7.0 (2026-09-08)
 
 > bump: minor
