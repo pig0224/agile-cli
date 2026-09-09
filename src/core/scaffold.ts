@@ -160,7 +160,7 @@ export function workspaceClaudeMdContent(
 |---|---|---|
 | ${paths.techSpecs}/ | 抽屉一：公司级技术规范 | 默认随仓库提交；登记为外部仓库后不入库（sync 管理） |
 | ${paths.bizTechDocs}/ | 抽屉二：团队技术设计知识库 | 默认随仓库提交；登记为外部仓库后不入库（sync 管理） |
-| ${paths.bizProductDocs}/ | 抽屉三：产品设计知识库（PRD / AC / 功能树） | 随仓库提交 |
+| ${paths.bizProductDocs}/ | 抽屉三：产品设计知识库（PRD / AC / 功能树 / 需求输入提示词） | 随仓库提交 |
 | ${paths.projects}/ | 抽屉四：团队项目代码（单例与组合成员平铺） | 随仓库提交 |
 | ${paths.processDocs}/ | 抽屉五：需求过程文档（STO-xxx / BUG-xxx / OPS-xxx） | 随仓库提交 |
 

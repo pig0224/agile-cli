@@ -38,7 +38,7 @@ function printCopyNotices(notices: CopyNotice[]): void {
 const DRAWER_READMES: Record<keyof typeof DEFAULT_PATHS, string> = {
   techSpecs: '# 抽屉一：公司级技术规范\n\n技术栈规范、SQL 规范、安全规范、通用工程规范。\n',
   bizTechDocs: '# 抽屉二：团队技术设计知识库\n\n架构设计、状态机设计、技术方案、工程规范。\n',
-  bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）。\n',
+  bizProductDocs: '# 抽屉三：产品设计知识库\n\nPRD 模板、产品规范、UI 规范、交互设计规范。\n需求文档放 `requirements/<编号>/`（PRD.md、AC.md、feature-tree.md、menu-tree.md）。\n需求输入提示词放 `prompts/`（/agile:prd 的描述源，一需求一稿，可选流程；约定见 `prompts/README.md`）。\n',
   projects: '# 抽屉四：团队项目代码\n\n单项目与组合模板的成员项目均平铺于此。\n',
   processDocs: '# 抽屉五：过程产物\n\n按需求编号（STO-xxx / BUG-xxx / OPS-xxx）归档的过程文档。\n',
 };
@@ -136,6 +136,48 @@ const PRD_TEMPLATE = `# <编号> 需求名称
 ## 非目标
 
 （可选：本需求明确不做什么）
+`;
+
+/** 需求输入提示词目录约定（prompts/README.md 预建内容）——提示词是「源」，PRD 是编译产物 */
+const PROMPTS_README = `# 需求输入提示词
+
+\`/agile:prd <编号>\` 的需求描述源。**提示词是「源」，PRD 是编译产物**——需求变更改这里，重跑 \`/agile:prd <编号>\` 再生成，不直接手改 PRD/AC。
+
+## 使用约定
+
+- **一需求一稿**：文件名 = 需求编号（\`STO-001.md\`、\`BUG-003.md\`），平铺本目录，不建子目录。
+- **首行 H1**：\`# <编号> <主题>\`，如 \`# STO-001 订单导出三个月流水\`——编号排序天然时序，首行主题可 grep，不需要另建索引。
+- **读取方式**：\`/agile:prd <编号>\` 时本目录同名稿存在则自动作为需求描述（命令参数文字可叠加补充）；自由命名稿用 \`--prompt <路径>\` 显式指定。
+- **多轮调整**：会话中直接说「把刚才的调整收敛进 prompts/<编号>.md」，或自行编辑（VS Code / GitHub Web）后重跑 prd。
+- **配套材料**（截图、纪要、外部文档要点）放 \`requirements/<编号>/\`，稿内以相对链接引用；本目录只放提示词本体。
+- **交付后保留原地**：即需求理解的历史记录，不归档、不移位（续作感知按编号定位）。
+- **轻量通道**（BUG / OPS 一句话需求）无需提示词稿；确需时按同约定放置即可。
+
+## 推荐骨架
+
+自由 markdown，仅推荐不强制：
+
+\`\`\`markdown
+# STO-001 订单导出三个月流水
+
+## 一句话
+（做什么、给谁用、解决什么问题）
+
+## 细节与约束
+- 业务规则 / 边界 / 异常路径
+- 非功能点（性能、权限、数据量…）
+
+## 明确不做
+- 排除项
+
+## 参考
+- 外部文档链接、旧版行为、会话纪要要点
+\`\`\`
+
+## 导航与登记
+
+- **不逐条登记库根导航、不设归档分组、无 frontmatter**：本目录是需求工作材料（与 \`requirements/\`、\`prototypes/\` 同族），不是知识文档——编号即索引，git 即历史。
+- 库根导航仅保留固定入口一行（指向本 README），新增提示词不登记。
 `;
 
 /** 旧版三 yaml（workspace/registry/plugin）→ settings.json 自动迁移；旧文件保留在磁盘，由人工 git rm */
@@ -243,6 +285,13 @@ export const initCommand = new Command('init')
           if (!(await exists(prdTemplate))) {
             await fs.mkdir(path.dirname(prdTemplate), { recursive: true });
             await fs.writeFile(prdTemplate, PRD_TEMPLATE, 'utf8');
+          }
+
+          // 需求输入提示词目录约定（幂等）——prompts/README.md 即 /agile:prd 描述源的使用说明
+          const promptsReadme = path.join(root, settings.paths.bizProductDocs, 'prompts', 'README.md');
+          if (!(await exists(promptsReadme))) {
+            await fs.mkdir(path.dirname(promptsReadme), { recursive: true });
+            await fs.writeFile(promptsReadme, PROMPTS_README, 'utf8');
           }
 
           // git init（幂等；初始分支固定 main——改名用 git branch -m）
