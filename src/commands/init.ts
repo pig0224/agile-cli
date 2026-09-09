@@ -300,7 +300,8 @@ export const initCommand = new Command('init')
           }
 
           // 根 .gitignore：幂等补缺——worktree 开发目录 + 项目生成事务临时目录（.tmp-*）+
-          // 过程档案截图产物（process-docs/<编号>/assets/——报告佐证本机留存，不入库）+
+          // 过程档案本机留存目录（process-docs/<编号>/assets/ 截图与 scripts/ 一次性验证脚本——
+          // 均不入库；有长期价值的复现/回归走项目测试套件与 e2e/）+
           // 已登记的外部仓库抽屉（tech-specs / biz-tech-docs 同一规则：登记为外部仓库才忽略——
           // 默认 workspace 内普通目录，随仓库提交获得版本管理；后补登记由 agile sync 拉取成功后自动补写该行）
           const gitignore = path.join(root, '.gitignore');
@@ -320,6 +321,7 @@ export const initCommand = new Command('init')
             '.worktrees/',
             '.tmp-*/',
             `${settings.paths.processDocs}/*/assets/`,
+            `${settings.paths.processDocs}/*/scripts/`,
             ...(settings.repos.techSpecs?.url ? [`${settings.paths.techSpecs}/`] : []),
             ...(settings.repos.bizTechDocs?.url ? [`${settings.paths.bizTechDocs}/`] : []),
           ].filter((l) => !have.has(l));
