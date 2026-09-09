@@ -1,3 +1,11 @@
+## v2.10.0 (2026-09-09)
+
+> bump: minor
+
+### Features
+
+- feat: init workspace 忽略 process-docs/<编号>/scripts/ 一次性脚本 ([`be6895d`](https://github.com/pig0224/agile-cli/commit/be6895d17dfed28526d5e211e2cb2ee461235f37))
+
 ## v2.9.0 (2026-09-09)
 
 > bump: minor
