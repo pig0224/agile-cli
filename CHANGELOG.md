@@ -1,3 +1,11 @@
+## v2.9.0 (2026-09-09)
+
+> bump: minor
+
+### Features
+
+- feat: init workspace 忽略 process-docs/<编号>/assets/ 截图产物 ([`8560bc5`](https://github.com/pig0224/agile-cli/commit/8560bc5d19325a9c5de79e67669624daf3df90aa))
+
 ## v2.8.1 (2026-09-09)
 
 > bump: patch
